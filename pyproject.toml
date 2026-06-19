@@ -12,6 +12,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "anthropic>=0.40",
     "pytest>=8",
     "pytest-cov>=6",
 ]
