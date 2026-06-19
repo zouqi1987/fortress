@@ -8,7 +8,7 @@ import time
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from src.data.market import FundInfo, IndexPoint, NAVPoint
+from src.datatypes import FundInfo, IndexPoint, NAVPoint, classify_fund_type
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ class TiantianSource:
         return FundInfo(
             code=code,
             name=info.get("FundName", code),
-            type=_classify_fund_type(info.get("FundType", "mixed")),
+            type=classify_fund_type(info.get("FundType", "mixed")),
             net_asset_value=nav_value,
             fee_rate=fee_rate,
             inception_date=inception,
@@ -153,16 +153,5 @@ class TiantianSource:
         raise NotImplementedError("TiantianSource does not support index daily data")
 
 
-def _classify_fund_type(raw: str) -> str:
-    raw_lower = str(raw).lower().strip()
-    if any(k in raw_lower for k in ("股票", "stock")):
-        return "stock"
-    if any(k in raw_lower for k in ("指数", "index")):
-        return "index"
-    if any(k in raw_lower for k in ("债券", "bond")):
-        return "bond"
-    if any(k in raw_lower for k in ("货币", "money")):
-        return "money"
-    if any(k in raw_lower for k in ("混合", "mixed", "平衡")):
-        return "mixed"
-    return "mixed"
+
+# classify_fund_type now imported from src.datatypes

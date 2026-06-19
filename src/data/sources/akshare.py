@@ -8,7 +8,7 @@ import time
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from src.data.market import FundInfo, IndexPoint, NAVPoint
+from src.datatypes import FundInfo, IndexPoint, NAVPoint, classify_fund_type
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ class AKShareSource:
         return FundInfo(
             code=code,
             name=info.get("基金简称", code),
-            type=_classify_fund_type(info.get("基金类型", "mixed")),
+            type=classify_fund_type(info.get("基金类型", "mixed")),
             net_asset_value=nav_value,
             fee_rate=fee_rate,
             inception_date=inception,
@@ -167,17 +167,4 @@ def _parse_chinese_amount(raw: str) -> Decimal:
         return Decimal("0")
 
 
-def _classify_fund_type(raw: str) -> str:
-    """Map Chinese fund type strings to our classification."""
-    raw_lower = raw.lower().strip()
-    if any(k in raw_lower for k in ("股票", "stock", "指数", "index")):
-        if "指数" in raw_lower or "index" in raw_lower:
-            return "index"
-        return "stock"
-    if any(k in raw_lower for k in ("债券", "bond")):
-        return "bond"
-    if any(k in raw_lower for k in ("货币", "money", "货币市场")):
-        return "money"
-    if any(k in raw_lower for k in ("混合", "mixed", "平衡")):
-        return "mixed"
-    return "mixed"
+# classify_fund_type now imported from src.datatypes

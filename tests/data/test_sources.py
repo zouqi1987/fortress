@@ -8,7 +8,8 @@ from unittest import mock
 
 import pytest
 
-from src.data.market import FundInfo, IndexPoint, MarketDataSource, NAVPoint
+from src.datatypes import FundInfo, IndexPoint, NAVPoint
+from src.data.market import MarketDataSource
 from src.data.sources.akshare import AKShareSource
 from src.data.sources.eastmoney import EastmoneySource
 from src.data.sources.tiantian import TiantianSource
@@ -100,6 +101,13 @@ class TestTiantianSource:
 
 
 # ── EastmoneySource ───────────────────────────────────────────────────
+
+
+class TestTiantianNotImplemented:
+    def test_index_daily_raises_not_implemented(self):
+        source = TiantianSource()
+        with pytest.raises(NotImplementedError):
+            source.fetch_index_daily("000300", date(2025, 1, 1), date(2025, 6, 19))
 
 
 class TestEastmoneySource:

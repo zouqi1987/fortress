@@ -8,7 +8,7 @@ import time
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from src.data.market import FundInfo, IndexPoint, NAVPoint
+from src.datatypes import FundInfo, IndexPoint, NAVPoint
 
 logger = logging.getLogger(__name__)
 

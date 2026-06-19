@@ -75,12 +75,11 @@ def assess_risk_profile(
         horizon_score = 3
 
     # ── Loss tolerance: 0–20 ────────────────────────────────────────
-    loss = float(max_loss_pct)
-    if loss >= 25:
+    if max_loss_pct >= Decimal("25"):
         loss_score = 18
-    elif loss >= 15:
+    elif max_loss_pct >= Decimal("15"):
         loss_score = 12
-    elif loss >= 10:
+    elif max_loss_pct >= Decimal("10"):
         loss_score = 8
     else:
         loss_score = 3

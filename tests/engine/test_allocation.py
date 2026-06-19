@@ -49,3 +49,8 @@ class TestBuildAllocation:
         large = build_allocation(RiskLevel.MODERATE, Decimal("1_000_000"))
         for sb, lb in zip(small.buckets, large.buckets):
             assert lb.amount > sb.amount
+
+    def test_zero_principal_handled(self):
+        plan = build_allocation(RiskLevel.MODERATE, Decimal("0"))
+        assert plan.total == Decimal("0")
+        assert all(b.amount == Decimal("0") for b in plan.buckets)

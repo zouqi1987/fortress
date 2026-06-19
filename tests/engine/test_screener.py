@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.data.market import FundInfo
+from src.datatypes import FundInfo
 from src.engine.screener import (
     ScreenConfig,
     ScreenResult,
@@ -64,3 +64,8 @@ class TestScreenFunds:
         results = screen_funds(sample_funds, config)
         tiny = next(r for r in results if r.fund.code == "000002")
         assert any("规模" in w or "size" in w.lower() for w in tiny.warnings)
+
+    def test_empty_fund_list(self):
+        config = ScreenConfig()
+        results = screen_funds([], config)
+        assert len(results) == 0

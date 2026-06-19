@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.data.market import FundInfo
+from src.datatypes import FundInfo
 from src.engine.auditor import AuditResult, audit_fund
 
 

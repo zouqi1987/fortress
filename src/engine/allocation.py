@@ -41,19 +41,19 @@ class AllocationPlan:
     @property
     def equity_pct(self) -> int:
         """Weighted average equity percentage across layers."""
-        val = float(sum(
+        total = sum(
             Decimal(l.equity_pct) * w
             for l, w in zip(self.layers, self.layer_weights)
-        ))
-        return round(val)
+        )
+        return int(total.to_integral_value(rounding=ROUND_HALF_UP))
 
     @property
     def bond_pct(self) -> int:
-        val = float(sum(
+        total = sum(
             Decimal(l.bond_pct) * w
             for l, w in zip(self.layers, self.layer_weights)
-        ))
-        return round(val)
+        )
+        return int(total.to_integral_value(rounding=ROUND_HALF_UP))
 
     @property
     def cash_pct(self) -> int:
@@ -118,7 +118,8 @@ def build_allocation(risk_level: RiskLevel, total_principal: Decimal) -> Allocat
             ))
         # 稳健 → mostly bond, some mixed
         elif layer.name == "稳健":
-            bond_amt = (layer_amount * Decimal(str(layer.bond_pct / 100))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            bond_pct_decimal = Decimal(layer.bond_pct) / Decimal("100")
+            bond_amt = (layer_amount * bond_pct_decimal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             mixed_amt = layer_amount - bond_amt
             if bond_amt > 0:
                 buckets.append(Bucket(
@@ -136,7 +137,8 @@ def build_allocation(risk_level: RiskLevel, total_principal: Decimal) -> Allocat
                 ))
         # 增值 → mostly equity/index, some bond
         else:
-            equity_amt = (layer_amount * Decimal(str(layer.equity_pct / 100))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            equity_pct_decimal = Decimal(layer.equity_pct) / Decimal("100")
+            equity_amt = (layer_amount * equity_pct_decimal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             bond_amt = layer_amount - equity_amt
             if equity_amt > 0:
                 buckets.append(Bucket(

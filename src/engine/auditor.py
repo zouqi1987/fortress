@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from src.data.market import FundInfo
+from src.datatypes import FundInfo, fmt_amount
 
 # ── Rule constants (will move to src/redlines/ in Phase 5) ───────────
 
@@ -48,8 +48,8 @@ def audit_fund(
     if fund.net_asset_value < MIN_FUND_SIZE:
         if planned_amount > MAX_POSITION_IN_SMALL_FUND:
             reasons.append(
-                f"基金规模 {_fmt_amount(fund.net_asset_value)} < 2亿，"
-                f"单客户持仓不得超过5万 (计划 {_fmt_amount(planned_amount)})"
+                f"基金规模 {fmt_amount(fund.net_asset_value)} < 2亿，"
+                f"单客户持仓不得超过5万 (计划 {fmt_amount(planned_amount)})"
             )
             severity = "reject"
 
@@ -89,11 +89,3 @@ def audit_fund(
         severity=severity,
         reasons=tuple(reasons),
     )
-
-
-def _fmt_amount(amount: Decimal) -> str:
-    yi = Decimal("100_000_000")
-    if amount >= yi:
-        return f"{float(amount / yi):.1f}亿"
-    wan = Decimal("10_000")
-    return f"{float(amount / wan):.0f}万"

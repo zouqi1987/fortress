@@ -5,39 +5,13 @@ plus the MarketDataFacade that chains them with failover.
 """
 import json
 import logging
-from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
+from src.datatypes import FundInfo, IndexPoint, NAVPoint
+
 logger = logging.getLogger(__name__)
-
-
-# ── Data Transfer Objects ────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class NAVPoint:
-    date: date
-    nav: Decimal  # 单位净值
-    acc_nav: Decimal  # 累计净值
-
-
-@dataclass(frozen=True)
-class FundInfo:
-    code: str
-    name: str
-    type: str  # "stock" | "bond" | "mixed" | "index" | "money"
-    net_asset_value: Decimal  # 基金规模 (元)
-    fee_rate: Decimal
-    inception_date: date
-
-
-@dataclass(frozen=True)
-class IndexPoint:
-    date: date
-    close: Decimal
-    volume: Decimal
 
 
 # ── Protocol ─────────────────────────────────────────────────────────

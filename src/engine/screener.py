@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from src.data.market import FundInfo
+from src.datatypes import FundInfo, fmt_amount
 
 
 @dataclass(frozen=True)
@@ -51,22 +51,21 @@ def screen_funds(funds: list[FundInfo], config: ScreenConfig) -> list[ScreenResu
         warnings: list[str] = []
 
         # Size score (0–30): bigger is better, up to 10B
-        size_b = float(min(fund.net_asset_value, Decimal("10_000_000_000")))
-        score += int(30 * size_b / 10_000_000_000)
+        size_val = min(fund.net_asset_value, Decimal("10_000_000_000"))
+        score += int(size_val * Decimal("30") / Decimal("10_000_000_000"))
 
         # Age score (0–20): older is better, up to 10 years
         age_days = (date.today() - fund.inception_date).days
         score += min(20, age_days // 180)  # ~0.5 point per half-year
 
         # Fee score (0–25): lower is better
-        fee = float(fund.fee_rate)
-        if fee <= 0.005:
+        if fund.fee_rate <= Decimal("0.005"):
             score += 25
-        elif fee <= 0.010:
+        elif fund.fee_rate <= Decimal("0.010"):
             score += 20
-        elif fee <= 0.015:
+        elif fund.fee_rate <= Decimal("0.015"):
             score += 15
-        elif fee <= 0.020:
+        elif fund.fee_rate <= Decimal("0.020"):
             score += 10
         else:
             score += 5
@@ -80,22 +79,14 @@ def screen_funds(funds: list[FundInfo], config: ScreenConfig) -> list[ScreenResu
 
         # ── Warnings ─────────────────────────────────────────────────
         if fund.net_asset_value < Decimal("200_000_000"):
-            warnings.append(f"基金规模 {_fmt(fund.net_asset_value)} 低于2亿")
+            warnings.append(f"基金规模 {fmt_amount(fund.net_asset_value)} 低于2亿")
         if (date.today() - fund.inception_date).days < 365:
             warnings.append(f"基金成立不足1年 ({fund.inception_date})")
         if fund.fee_rate > Decimal("0.015"):
-            warnings.append(f"费率偏高 ({float(fund.fee_rate):.1%})")
+            warnings.append(f"费率偏高 ({float(fund.fee_rate):.1%})")  # float() OK: format-only
 
         results.append(ScreenResult(fund=fund, score=score, warnings=tuple(warnings)))
 
     results.sort(key=lambda r: r.score, reverse=True)
     return results
 
-
-def _fmt(amount: Decimal) -> str:
-    """Human-readable amount string for Chinese market."""
-    yi = Decimal("100_000_000")
-    if amount >= yi:
-        return f"{float(amount / yi):.1f}亿"
-    wan = Decimal("10_000")
-    return f"{float(amount / wan):.0f}万"

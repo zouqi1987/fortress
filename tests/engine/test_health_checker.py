@@ -80,3 +80,23 @@ class TestHealthChecker:
             num_holdings=5,
         )
         assert result_many.diversification_score < result_few.diversification_score
+
+    def test_single_holding(self):
+        result = check_portfolio_health(
+            equity_pct=60, bond_pct=30, cash_pct=10,
+            risk_level=RiskLevel.MODERATE,
+            fee_ratio=Decimal("0.010"),
+            max_drawdown_pct=Decimal("10"),
+            num_holdings=1,
+        )
+        assert result.diversification_score < 25  # penalty for too few
+
+    def test_zero_holdings(self):
+        result = check_portfolio_health(
+            equity_pct=60, bond_pct=30, cash_pct=10,
+            risk_level=RiskLevel.MODERATE,
+            fee_ratio=Decimal("0.010"),
+            max_drawdown_pct=Decimal("10"),
+            num_holdings=0,
+        )
+        assert result.diversification_score < 20

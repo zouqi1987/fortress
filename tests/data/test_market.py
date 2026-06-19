@@ -4,13 +4,11 @@ from decimal import Decimal
 
 import pytest
 
+from src.datatypes import FundInfo, IndexPoint, NAVPoint
 from src.data.market import (
     CachedSource,
-    FundInfo,
-    IndexPoint,
     MarketDataFacade,
     MarketDataSource,
-    NAVPoint,
 )
 
 

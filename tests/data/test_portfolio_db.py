@@ -124,6 +124,13 @@ class TestTransactionCRUD:
         assert db.get_transaction("no-such-txn") is None
 
 
+class TestWithoutContextManager:
+    def test_raises_without_context(self, tmp_path):
+        db = PortfolioDB(str(tmp_path / "noctx.db"))
+        with pytest.raises(RuntimeError, match="context manager"):
+            db.get_account("assets:cash")
+
+
 class TestContextManager:
     def test_enter_exit(self, tmp_path):
         with PortfolioDB(str(tmp_path / "ctx.db")) as db:

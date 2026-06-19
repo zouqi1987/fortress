@@ -190,27 +190,34 @@ class PortfolioDB:
             (start.isoformat(), end.isoformat()),
         ).fetchall()
 
-        result: list[Transaction] = []
-        for txn_row in txn_rows:
-            split_rows = conn.execute(
-                "SELECT * FROM splits WHERE txn_id = ? ORDER BY id",
-                (txn_row["id"],),
-            ).fetchall()
-            splits = tuple(
+        if not txn_rows:
+            return []
+
+        # Batch load all splits in one query
+        txn_ids = [r["id"] for r in txn_rows]
+        placeholders = ",".join("?" for _ in txn_ids)
+        split_rows = conn.execute(
+            f"SELECT * FROM splits WHERE txn_id IN ({placeholders}) ORDER BY id",
+            txn_ids,
+        ).fetchall()
+
+        # Group splits by txn_id
+        splits_by_txn: dict[str, list[Split]] = {tid: [] for tid in txn_ids}
+        for s in split_rows:
+            splits_by_txn[s["txn_id"]].append(
                 Split(
                     account_path=s["account_path"],
                     amount=Decimal(s["amount"]),
                     memo=s["memo"],
                 )
-                for s in split_rows
-            )
-            result.append(
-                Transaction(
-                    id=txn_row["id"],
-                    date=date.fromisoformat(txn_row["date"]),
-                    description=txn_row["description"],
-                    splits=splits,
-                )
             )
 
-        return result
+        return [
+            Transaction(
+                id=r["id"],
+                date=date.fromisoformat(r["date"]),
+                description=r["description"],
+                splits=tuple(splits_by_txn[r["id"]]),
+            )
+            for r in txn_rows
+        ]

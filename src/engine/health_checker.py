@@ -76,32 +76,30 @@ def check_portfolio_health(
         warnings.append(f"持仓数量过多 ({num_holdings}只)，过度分散降低收益")
 
     # ── 3. Fee efficiency (0–25) ─────────────────────────────────────
-    fee_pct = float(fee_ratio)
-    if fee_pct <= 0.005:
+    if fee_ratio <= Decimal("0.005"):
         fee_score = 25
-    elif fee_pct <= 0.010:
+    elif fee_ratio <= Decimal("0.010"):
         fee_score = 20
-    elif fee_pct <= 0.015:
+    elif fee_ratio <= Decimal("0.015"):
         fee_score = 15
-    elif fee_pct <= 0.020:
+    elif fee_ratio <= Decimal("0.020"):
         fee_score = 10
     else:
         fee_score = 5
-        warnings.append(f"加权费率偏高 ({fee_pct:.2%})")
+        warnings.append(f"加权费率偏高 ({float(fee_ratio):.2%})")
 
     # ── 4. Drawdown (0–10) ──────────────────────────────────────────
-    dd = float(max_drawdown_pct)
-    if dd <= 5:
+    if max_drawdown_pct <= Decimal("5"):
         dd_score = 10
-    elif dd <= 10:
+    elif max_drawdown_pct <= Decimal("10"):
         dd_score = 8
-    elif dd <= 20:
+    elif max_drawdown_pct <= Decimal("20"):
         dd_score = 5
-    elif dd <= 30:
+    elif max_drawdown_pct <= Decimal("30"):
         dd_score = 2
     else:
         dd_score = 0
-        warnings.append(f"近期最大回撤较大 ({dd:.0f}%)")
+        warnings.append(f"近期最大回撤较大 ({float(max_drawdown_pct):.0f}%)")
 
     overall = drift_score + div_score + fee_score + dd_score
 

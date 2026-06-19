@@ -69,3 +69,8 @@ class TestStressTester:
         )
         result = run_stress_test(sample_portfolio, scenario)
         assert result.total_loss > Decimal("0")  # gain
+
+    def test_empty_portfolio(self):
+        result = run_stress_test({}, Scenario(name="crash", equity_shock=Decimal("-0.40")))
+        assert result.final_value == Decimal("0")
+        assert result.loss_pct == Decimal("0")

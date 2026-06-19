@@ -3,11 +3,8 @@
 Zero I/O. Takes return series + config, returns optimized weights.
 Supports Black-Litterman with Entropy Pooling for LLM subjective views.
 """
-import logging
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -52,7 +49,6 @@ def optimize_portfolio(
         )
 
     try:
-        import numpy as np
         import pandas as pd
         import riskfolio as rp
     except ImportError as e:
@@ -117,7 +113,6 @@ def optimize_portfolio(
         )
 
     except Exception as e:
-        logger.warning("Portfolio optimization failed: %s. Falling back to equal weight.", e)
         return OptimizationResult(
             weights=_equal_weight(returns),
             success=False,
