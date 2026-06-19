@@ -57,51 +57,61 @@ class AKShareSource:
     # ── Implementation ──────────────────────────────────────────────
 
     def _fetch_fund_nav_impl(self, code: str, start: date, end: date) -> list[NAVPoint]:
-        import akshare as ak
-
-        df = ak.fund_open_fund_info_em(symbol=code, indicator="单位净值走势")
-        if df is None or df.empty:
-            raise ValueError(f"No NAV data returned for fund {code}")
-
-        points: list[NAVPoint] = []
-        for _, row in df.iterrows():
-            d = _parse_date(row.iloc[0])
-            if d < start or d > end:
-                continue
-            try:
-                nav = Decimal(str(row.iloc[1])).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                acc_nav = Decimal(str(row.iloc[2])).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-            except (ValueError, IndexError):
-                continue
-            points.append(NAVPoint(date=d, nav=nav, acc_nav=acc_nav))
-        return points
+        """Fetch NAV via eastmoney direct API (more reliable than akshare wrapper)."""
+        from src.data.sources._eastmoney_base import fetch_fund_nav
+        return fetch_fund_nav(code, start, end)
 
     def _fetch_fund_info_impl(self, code: str) -> FundInfo:
+        """Fetch fund basic info via akshare xueqiu API (eastmoney API deprecated)."""
         import akshare as ak
 
+        # Primary: xueqiu API (working as of 2026-06)
+        try:
+            df = ak.fund_individual_basic_info_xq(symbol=code)
+            if df is not None and not df.empty:
+                info: dict[str, str] = {}
+                for _, row in df.iterrows():
+                    key = str(row.iloc[0]).strip()
+                    val = str(row.iloc[1]).strip() if row.iloc[1] is not None else ""
+                    info[key] = val
+
+                name = info.get("基金名称", info.get("基金简称", code))
+                fund_type_raw = info.get("基金类型", "mixed")
+
+                # Parse size e.g. "26.44亿"
+                size_str = info.get("最新规模", info.get("基金规模", "0"))
+                nav_value = _parse_chinese_amount(size_str) if size_str != "--" else Decimal("0")
+
+                inception_str = info.get("成立时间", info.get("成立日期", "2020-01-01"))
+                inception = _parse_date(inception_str) if inception_str != "--" else date(2020, 1, 1)
+
+                return FundInfo(
+                    code=code,
+                    name=name,
+                    type=classify_fund_type(fund_type_raw),
+                    net_asset_value=nav_value,
+                    fee_rate=Decimal("0.015"),  # xueqiu doesn't provide fee rate
+                    inception_date=inception,
+                )
+        except Exception:
+            pass
+
+        # Fallback: old eastmoney API (may be deprecated)
         df = ak.fund_open_fund_info_em(symbol=code, indicator="基金信息")
         if df is None or df.empty:
-            raise ValueError(f"No fund info returned for {code}")
+            raise ValueError(f"No fund info returned for {code} (both xueqiu and eastmoney APIs failed)")
 
-        # akshare returns a DataFrame with columns: 项目, 内容
-        info: dict[str, str] = {}
+        info = {}
         for _, row in df.iterrows():
             info[str(row.iloc[0]).strip()] = str(row.iloc[1]).strip() if row.iloc[1] is not None else ""
-
-        fee_rate = Decimal("0.015")  # default
-        nav_str = info.get("基金规模", "0")
-        # Parse "12.34亿元" format
-        nav_value = _parse_chinese_amount(nav_str)
-
-        inception = _parse_date(info.get("成立日期", "2020-01-01"))
 
         return FundInfo(
             code=code,
             name=info.get("基金简称", code),
             type=classify_fund_type(info.get("基金类型", "mixed")),
-            net_asset_value=nav_value,
-            fee_rate=fee_rate,
-            inception_date=inception,
+            net_asset_value=_parse_chinese_amount(info.get("基金规模", "0")),
+            fee_rate=Decimal("0.015"),
+            inception_date=_parse_date(info.get("成立日期", "2020-01-01")),
         )
 
     def _fetch_index_daily_impl(self, code: str, start: date, end: date) -> list[IndexPoint]:
