@@ -136,18 +136,42 @@ RULE_FUND_MIN_SIZE = RedLine(
 
 ---
 
+## ADR-9: LLM 架构 — Skill 作为领域计算引擎
+
+**决策**: 堡垒是领域知识引擎（计算 + 规则），不是自主 LLM Agent。
+宿主 LLM（Claude Code / Hermes）负责自然语言叙事，堡垒负责结构化信号计算。
+
+**理由**:
+- 堡垒作为 Skill 嵌入 Claude Code，宿主 LLM 自带语言能力。Skill 不应有自己的 API key。
+- 引擎层（PE 分位、波动率、规模阈值）是宿主 LLM 无法执行的计算——这是 Skill 的独特价值。
+- 分离关注点：Skill = 量化信号；宿主 LLM = 语言包装。各司其职。
+
+**架构**:
+```
+用户对话 → 宿主 LLM 理解意图 → 调用 MCP tools → 堡垒引擎计算 → 结构化信号返回 → 宿主 LLM 叙事
+```
+
+**debater 节点**: 输出结构化 DebateSignals（bull_signals + bear_signals + conclusion_framework），
+而非 LLM 生成的文本。信号来源于纯计算——PE 分位、波动率评估、分散度检查。
+
+**独立模式**: `src/agent/llm.py` 保留为可选适配器。
+设置 `FORTRESS_LLM=deepseek` + `DEEPSEEK_API_KEY` 可脱离宿主独立运行。
+默认模式无需任何外部 API key。
+
+---
+
 ## 组件架构图
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   用户对话界面                        │
-│         Claude Code (MCP) / Hermes Agent             │
+│                   宿主 LLM                           │
+│         Claude Code / Hermes Agent                  │
+│         （自然语言理解 + 叙事生成）                    │
 └──────────────────────┬──────────────────────────────┘
                        │ MCP 协议
 ┌──────────────────────▼──────────────────────────────┐
 │                 src/tools/                           │
-│  MCP 工具注册层 — risk / portfolio / advisory        │
-│  / audit / scenario / market 六个工具                │
+│  MCP 工具注册层 — 6 工具 + FastMCP server            │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────┐

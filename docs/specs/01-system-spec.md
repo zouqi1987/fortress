@@ -81,78 +81,40 @@
 
 ```
 fortress/
-├── README.md                     # 项目说明 + 快速开始
-├── CLAUDE.md                     # Claude Code 集成指南
-├── .mcp.json                     # MCP 配置（如选 MCP）
-├── pyproject.toml                # Python 项目配置
-├── docs/
-│   └── specs/                    # 所有规格文档
-│       ├── 01-system-spec.md     # 本文件 — 系统规格
-│       ├── 02-architecture.md    # 架构决策记录
-│       └── 03-phase2-data-layer.md # Phase 2 数据层设计
+├── README.md
+├── SKILL.md
+├── CLAUDE.md
+├── .mcp.json
+├── pyproject.toml
+├── .github/workflows/test.yml    # CI
+├── docs/specs/
+│   ├── 01-system-spec.md
+│   ├── 02-architecture.md        # 9 ADRs
+│   ├── 03-phase2-data-layer.md
+│   └── 04-phase4-agent-layer.md
 ├── src/
-│   ├── __init__.py
-│   ├── engine/                   # 核心引擎（无 I/O）
-│   │   ├── __init__.py
-│   │   ├── ledger.py             # 三实体账本（Split/Transaction/Account）
-│   │   ├── risk_profile.py       # 5 因子风险测评引擎
-│   │   ├── allocation.py         # 三层架构 + 四桶模型分配引擎
-│   │   ├── screener.py           # 产品筛选 + 排名逻辑
-│   │   ├── auditor.py            # 单品审计 + 红线规则引擎
-│   │   ├── optimizer.py          # Riskfolio-Lib 封装（BL + Entropy Pooling）
-│   │   ├── stress_tester.py      # 情景压力测试引擎
-│   │   └── health_checker.py     # 组合健康度评分
-│   ├── agent/                    # Agent 推理管线（LangGraph）
-│   │   ├── __init__.py
-│   │   ├── graph.py              # 主导航 DAG（路径 A/B/C 路由）
-│   │   ├── nodes/                # DAG 节点
-│   │   │   ├── __init__.py
-│   │   │   ├── data_collector.py # 数据采集节点（调用 data/ 层）
-│   │   │   ├── debater.py        # Bull-vs-Bear 辩论节点
-│   │   │   ├── allocator.py      # 配置建议节点
-│   │   │   ├── risk_assessor.py  # 风险评估节点
-│   │   │   └── reporter.py       # 报告生成节点
-│   │   └── state.py              # 对话状态 Schema
-│   ├── data/                     # 数据层（I/O 管线）
-│   │   ├── __init__.py
-│   │   ├── market.py             # 市场数据源适配器（akshare + 天天基金）
-│   │   ├── portfolio_db.py       # 持仓 SQLite CRUD
-│   │   ├── cache.py              # 本地缓存层
-│   │   └── sources/              # 数据源适配器
-│   │       ├── __init__.py
-│   │       ├── eastmoney.py      # 东财 API
-│   │       ├── tiantian.py       # 天天基金
-│   │       └── akshare.py        # akshare 封装
-│   ├── redlines/                 # 红线规则库（可配置）
-│   │   ├── __init__.py
-│   │   ├── hard_rules.py         # 通用硬规则（规模<2亿→限5万 等）
-│   │   └── personal_rules.py     # 用户自定义偏好规则
-│   └── tools/                    # MCP/A2A 工具定义
-│       ├── __init__.py
-│       ├── risk.py               # 风险测评工具
-│       ├── portfolio.py          # 持仓管理工具
-│       ├── advisory.py           # 投顾建议工具
-│       ├── audit.py              # 单品审计工具
-│       ├── scenario.py           # 压力测试工具
-│       └── market.py             # 市场数据工具
+│   ├── datatypes.py              # 共享类型
+│   ├── engine/                   # 零 I/O 纯函数
+│   │   ├── ledger.py, risk_profile.py, allocation.py
+│   │   ├── screener.py, auditor.py, optimizer.py
+│   │   ├── stress_tester.py, health_checker.py
+│   ├── data/                     # I/O 管线
+│   │   ├── market.py, cache.py, portfolio_db.py
+│   │   └── sources/ (akshare.py, tiantian.py, eastmoney.py)
+│   ├── agent/                    # LangGraph DAG
+│   │   ├── state.py, graph.py, signals.py, llm.py
+│   │   └── nodes/ (data_collector, debater, allocator, risk_assessor, reporter)
+│   ├── redlines/                 # 红线规则 DSL
+│   │   ├── hard_rules.py, personal_rules.py
+│   └── tools/                    # MCP server + 6 tools
+│       ├── server.py, __main__.py
+│       ├── risk.py, portfolio.py, advisory.py, audit.py, scenario.py, market.py
 ├── tests/
-│   ├── conftest.py               # 共享 fixtures
-│   ├── engine/                   # 引擎层单元测试
-│   ├── agent/                    # Agent 管线集成测试
-│   ├── data/                     # 数据层测试（含 mock）
-│   └── redlines/                 # 红线规则测试
-├── references/                   # 参考文档（从 v0.x 移植）
-│   ├── asset_classes.md
-│   ├── risk_framework.md
-│   ├── product_guide.md
-│   └── prescription-output-template.md
-├── scripts/                      # 独立脚本（无需 MCP）
-│   ├── init_db.py                # 初始化数据库
-│   ├── fetch_data.py             # 数据拉取
-│   └── healthcheck.py            # 巡检脚本
-└── docs/
-    ├── architecture.md           # 架构决策记录
-    └── intent/                   # 用户意图文档
+│   ├── conftest.py
+│   ├── engine/, agent/, data/, redlines/, tools/, integration/
+│   └── test_datatypes.py
+└── scripts/
+    ├── init_db.py, healthcheck.py
 ```
 
 ### 关键架构决策
