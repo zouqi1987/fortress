@@ -82,7 +82,7 @@ def optimize_portfolio(
             model="Classic",
             rm=config.risk_measure,
             obj="MinRisk",
-            rf=float(config.risk_free_rate),
+            rf=float(config.risk_free_rate),  # float() OK: riskfolio API requires float
         )
 
         if w is None or w.empty:

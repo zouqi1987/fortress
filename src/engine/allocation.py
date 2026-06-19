@@ -103,7 +103,6 @@ def build_allocation(risk_level: RiskLevel, total_principal: Decimal) -> Allocat
         layer_weights = (Decimal("0.10"), Decimal("0.35"), Decimal("0.55"))
 
     buckets: list[Bucket] = []
-    bucket_id = 0
 
     for layer, weight in zip(layers, layer_weights):
         layer_amount = (total_principal * weight).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)

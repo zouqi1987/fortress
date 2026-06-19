@@ -1,7 +1,8 @@
 """Data collector node — fetches portfolio and market data.
 
 Pure function: (state) → state_update dict.
-Data fetching is done via injected callables (default: no-op placeholders).
+TODO(Phase 8): Inject real portfolio_db/market data via dependency injection.
+Currently returns static defaults safe for demo/testing.
 """
 from src.agent.state import ConversationState
 

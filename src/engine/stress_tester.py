@@ -36,13 +36,24 @@ class StressResult:
 # ── Historical scenarios ─────────────────────────────────────────────
 
 
-HISTORICAL_SCENARIOS: tuple[Scenario, ...] = (
+def worst_scenario_for(portfolio: dict[str, Decimal]) -> Scenario:
+    """Return the historical scenario with the largest total portfolio impact."""
+    def _total_impact(s: Scenario) -> Decimal:
+        eq = abs(s.equity_shock or Decimal("0")) * portfolio.get("equity", Decimal("0"))
+        bd = abs(s.bond_shock or Decimal("0")) * portfolio.get("bond", Decimal("0"))
+        cs = abs(s.cash_shock or Decimal("0")) * portfolio.get("cash", Decimal("0"))
+        return eq + bd + cs
+
+    return max(HISTORICAL_SCENARIOS, key=_total_impact)
+
+
+HISTORICAL_SCENARIOS: list[Scenario] = [
     Scenario(name="2008 全球金融危机", equity_shock=Decimal("-0.50"), bond_shock=Decimal("0.05")),
     Scenario(name="2015 A股暴跌", equity_shock=Decimal("-0.40"), bond_shock=Decimal("0.02")),
     Scenario(name="2020 新冠冲击", equity_shock=Decimal("-0.30"), bond_shock=Decimal("0.10")),
     Scenario(name="利率大幅上行", equity_shock=Decimal("-0.15"), bond_shock=Decimal("-0.10")),
     Scenario(name="人民币贬值压力", equity_shock=Decimal("-0.10"), bond_shock=Decimal("-0.05")),
-)
+]
 
 
 def run_stress_test(portfolio: dict[str, Decimal], scenario: Scenario) -> StressResult:

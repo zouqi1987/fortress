@@ -1,14 +1,15 @@
 """天天基金 data source adapter — backup source for Chinese fund data.
 
-Direct HTTP queries to eastmoney fund API. 2 retries, 1s interval.
+Delegates to shared eastmoney API helpers. 2 retries, 1s interval.
+Tiantian differs from EastmoneySource by having a shorter retry strategy
+and not supporting index daily data.
 """
-import json
 import logging
 import time
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
 
-from src.datatypes import FundInfo, IndexPoint, NAVPoint, classify_fund_type
+from src.data.sources._eastmoney_base import fetch_fund_info, fetch_fund_nav
+from src.datatypes import FundInfo, IndexPoint, NAVPoint
 
 logger = logging.getLogger(__name__)
 
@@ -48,125 +49,13 @@ class TiantianSource:
                     time.sleep(RETRY_DELAY)
         raise last_error  # type: ignore[misc]
 
-    # ── Helpers ──────────────────────────────────────────────────────
-
-    @staticmethod
-    def _parse_jsonp(raw: str) -> dict:
-        """Parse JSONP response robustly. Handles missing/malformed callbacks."""
-        raw = raw.strip()
-        # Try JSONP format: jQuery(...)
-        if "(" in raw and raw.rstrip().endswith(")"):
-            json_str = raw[raw.index("(") + 1 : raw.rindex(")")]
-            return json.loads(json_str)
-        # Try plain JSON
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            raise ValueError(f"Unrecognized response format (first 200 chars): {raw[:200]}")
-
-    # ── Implementation ───────────────────────────────────────────────
+    # ── Implementation (delegates to shared eastmoney base) ───────────
 
     def _fetch_fund_nav_impl(self, code: str, start: date, end: date) -> list[NAVPoint]:
-        """Fetch NAV via eastmoney fund API."""
-        import urllib.request
-
-        page_index = 1
-        page_size = 100
-        points: list[NAVPoint] = []
-
-        while True:
-            url = (
-                f"https://api.fund.eastmoney.com/f10/lsjz?"
-                f"callback=jQuery&fundCode={code}&pageIndex={page_index}&pageSize={page_size}"
-                f"&startDate={start.strftime('%Y-%m-%d')}&endDate={end.strftime('%Y-%m-%d')}"
-            )
-            req = urllib.request.Request(url)
-            req.add_header("Referer", "https://fundf10.eastmoney.com/")
-            try:
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    raw = resp.read().decode("utf-8")
-            except Exception as e:
-                raise ConnectionError(f"tiantian NAV request failed: {e}") from e
-
-            # Parse JSONP: jQuery(...)
-            data = self._parse_jsonp(raw)
-
-            if data.get("ErrCode") != 0:
-                raise ValueError(f"tiantian API error: {data.get('ErrMsg', 'unknown')}")
-
-            items = data.get("Data", {}).get("LSJZList", [])
-            if not items:
-                break
-
-            for item in items:
-                try:
-                    d = date.fromisoformat(item["FSRQ"])
-                    nav = Decimal(str(item["DWJZ"])).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                    acc_nav = Decimal(str(item.get("LJJZ", item["DWJZ"]))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                    points.append(NAVPoint(date=d, nav=nav, acc_nav=acc_nav))
-                except (KeyError, ValueError):
-                    continue
-
-            if len(items) < page_size:
-                break
-            page_index += 1
-
-        return points
+        return fetch_fund_nav(code, start, end)
 
     def _fetch_fund_info_impl(self, code: str) -> FundInfo:
-        """Fetch fund basic info via eastmoney API."""
-        import urllib.request
-
-        url = (
-            f"https://api.fund.eastmoney.com/f10/fundInfo?"
-            f"callback=jQuery&fundCode={code}"
-        )
-        req = urllib.request.Request(url)
-        req.add_header("Referer", "https://fundf10.eastmoney.com/")
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                raw = resp.read().decode("utf-8")
-        except Exception as e:
-            raise ConnectionError(f"tiantian info request failed: {e}") from e
-
-        json_str = raw[raw.index("(") + 1 : raw.rindex(")")]
-        data = json.loads(json_str)
-
-        if data.get("ErrCode") != 0:
-            raise ValueError(f"tiantian fund info error: {data.get('ErrMsg', 'unknown')}")
-
-        info = data.get("Data", {})
-        nav_str = info.get("AssetSize", "0")
-        try:
-            nav_value = Decimal(str(nav_str)) if nav_str else Decimal("0")
-        except Exception:
-            nav_value = Decimal("0")
-
-        fee_str = info.get("Rate", "0.015")
-        try:
-            fee_rate = Decimal(str(fee_str)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-        except Exception:
-            fee_rate = Decimal("0.015")
-
-        inception_str = info.get("FoundDate", "2020-01-01")
-        try:
-            inception = date.fromisoformat(str(inception_str)[:10])
-        except (ValueError, TypeError):
-            inception = date(2020, 1, 1)
-
-        return FundInfo(
-            code=code,
-            name=info.get("FundName", code),
-            type=classify_fund_type(info.get("FundType", "mixed")),
-            net_asset_value=nav_value,
-            fee_rate=fee_rate,
-            inception_date=inception,
-        )
+        return fetch_fund_info(code)
 
     def _fetch_index_daily_impl(self, code: str, start: date, end: date) -> list[IndexPoint]:
-        """Not supported for tiantian — indexes are fetched via akshare or eastmoney."""
         raise NotImplementedError("TiantianSource does not support index daily data")
-
-
-
-# classify_fund_type now imported from src.datatypes

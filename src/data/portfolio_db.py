@@ -196,7 +196,11 @@ class PortfolioDB:
         # Batch load all splits in one query (safe: placeholders are literal "?" only)
         txn_ids = [r["id"] for r in txn_rows]
         if len(txn_ids) > 500:
-            # Guard against oversized SQL — paginate if needed
+            import logging
+            logging.getLogger(__name__).warning(
+                "list_transactions: truncating %d transactions to 500. Paginate for full results.",
+                len(txn_ids),
+            )
             txn_ids = txn_ids[:500]
         placeholders = ",".join("?" for _ in txn_ids)
         split_rows = conn.execute(

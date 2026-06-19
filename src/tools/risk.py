@@ -15,7 +15,9 @@ def assess_risk(horizon: str, max_loss_pct: float, income: int, experience: int,
         liquidity: liquidity need 1-5
     """
     horizon_map = {"short": InvestmentHorizon.SHORT, "medium": InvestmentHorizon.MEDIUM, "long": InvestmentHorizon.LONG}
-    h = horizon_map.get(horizon, InvestmentHorizon.MEDIUM)
+    h = horizon_map.get(horizon)
+    if h is None:
+        return {"error": f"Invalid horizon: {horizon!r}. Use 'short', 'medium', or 'long'."}
 
     profile = assess_risk_profile(
         horizon=h,

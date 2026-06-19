@@ -17,7 +17,9 @@ def get_allocation(risk_level: str, total_amount: float) -> dict:
         "moderate": RiskLevel.MODERATE,
         "aggressive": RiskLevel.AGGRESSIVE,
     }
-    level = level_map.get(risk_level, RiskLevel.MODERATE)
+    level = level_map.get(risk_level)
+    if level is None:
+        return {"error": f"Invalid risk_level: {risk_level!r}. Use 'conservative', 'moderate', or 'aggressive'."}
     plan = build_allocation(level, Decimal(str(total_amount)))
 
     return {

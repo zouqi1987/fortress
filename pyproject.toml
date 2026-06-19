@@ -5,7 +5,7 @@ description = "AI 投资顾问 Agent Skill — 对话式基金/ETF 组合管理"
 requires-python = ">=3.12"
 dependencies = [
     "akshare>=1.16",
-    "langgraph>=0.4",
+    "langgraph>=1.2",
     "mcp>=1.0",
     "riskfolio-lib>=7.3",
 ]

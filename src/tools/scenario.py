@@ -1,7 +1,7 @@
 """MCP tool: scenario stress testing."""
 from decimal import Decimal
 
-from src.engine.stress_tester import HISTORICAL_SCENARIOS, Scenario, run_stress_test
+from src.engine.stress_tester import HISTORICAL_SCENARIOS, Scenario, run_stress_test, worst_scenario_for
 
 
 def run_scenario(equity: float, bond: float, cash: float, scenario_name: str | None = None) -> dict:
@@ -24,8 +24,7 @@ def run_scenario(equity: float, bond: float, cash: float, scenario_name: str | N
         if scenario is None:
             scenario = Scenario(name=scenario_name)  # no-shock fallback
     else:
-        # Use worst historical scenario
-        scenario = max(HISTORICAL_SCENARIOS, key=lambda s: abs(s.equity_shock or Decimal("0")))
+        scenario = worst_scenario_for(portfolio)
 
     result = run_stress_test(portfolio, scenario)
 

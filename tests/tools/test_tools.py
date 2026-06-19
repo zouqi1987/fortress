@@ -13,15 +13,15 @@ from src.tools.scenario import run_scenario
 
 class TestAssessRisk:
     def test_returns_profile_dict(self):
-        result = assess_risk("moderate", 15.0, 3, 3, 3)
+        result = assess_risk("medium", 15.0, 3, 3, 3)
         assert result["level"] == "moderate"
         assert "total_score" in result
         assert "equity_pct" in result
         assert result["equity_pct"] + result["bond_pct"] + result["cash_pct"] == 100
 
-    def test_invalid_horizon_defaults_to_moderate(self):
+    def test_invalid_horizon_returns_error(self):
         result = assess_risk("century", 10.0, 3, 3, 3)
-        assert result["level"] in ("conservative", "moderate", "aggressive")
+        assert "error" in result
 
 
 class TestGetAllocation:
@@ -31,9 +31,9 @@ class TestGetAllocation:
         assert len(result["buckets"]) > 0
         assert result["total"] == 100000
 
-    def test_invalid_level_defaults(self):
+    def test_invalid_level_returns_error(self):
         result = get_allocation("extreme", 50000)
-        assert "buckets" in result
+        assert "error" in result
 
 
 class TestGetAdvice:
