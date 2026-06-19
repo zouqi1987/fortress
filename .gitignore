@@ -9,6 +9,8 @@ build/
 venv/
 data/*.db
 .env
+.coverage
+htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
