@@ -25,7 +25,7 @@ def get_advice(path: str, message: str, portfolio: dict | None = None) -> dict:
                 for k, v in portfolio.items()
             }
             state["portfolio"] = validated
-        except (ValueError, TypeError, AttributeError) as e:
+        except (ValueError, TypeError, AttributeError, ArithmeticError) as e:
             return {
                 "report_html": "",
                 "path": path,
