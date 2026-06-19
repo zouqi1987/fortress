@@ -1,5 +1,7 @@
 # 🏰 Fortress — AI 投资顾问 v2.0
 
+[![Test](https://github.com/zouqi1987/fortress/actions/workflows/test.yml/badge.svg)](https://github.com/zouqi1987/fortress/actions/workflows/test.yml)
+
 对话式 AI 投资顾问 Agent Skill。三条路径：
 
 - **路径 A — 底仓配置**（求确定性）：风险测评 → 三层架构 → 产品筛选 → 压力测试
