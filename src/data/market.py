@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class IndexPoint:
 # ── Protocol ─────────────────────────────────────────────────────────
 
 
+@runtime_checkable
 class MarketDataSource(Protocol):
     """All data source adapters implement this interface."""
 
