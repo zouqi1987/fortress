@@ -11,6 +11,9 @@ class MarketCache:
 
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
+        # Ensure parent directory exists
+        from pathlib import Path
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(db_path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._create_schema()

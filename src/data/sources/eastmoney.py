@@ -47,6 +47,20 @@ class EastmoneySource:
                     time.sleep(RETRY_DELAY)
         raise last_error  # type: ignore[misc]
 
+    # ── Helpers ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _parse_jsonp(raw: str) -> dict:
+        """Parse JSONP response robustly. Handles missing/malformed callbacks."""
+        raw = raw.strip()
+        if "(" in raw and raw.rstrip().endswith(")"):
+            json_str = raw[raw.index("(") + 1 : raw.rindex(")")]
+            return json.loads(json_str)
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            raise ValueError(f"Unrecognized response format (first 200 chars): {raw[:200]}")
+
     # ── Implementation ───────────────────────────────────────────────
 
     def _fetch_fund_nav_impl(self, code: str, start: date, end: date) -> list[NAVPoint]:
@@ -71,8 +85,7 @@ class EastmoneySource:
             except Exception as e:
                 raise ConnectionError(f"eastmoney NAV request failed: {e}") from e
 
-            json_str = raw[raw.index("(") + 1 : raw.rindex(")")]
-            data = json.loads(json_str)
+            data = self._parse_jsonp(raw)
 
             if data.get("ErrCode") != 0:
                 raise ValueError(f"eastmoney API error: {data.get('ErrMsg', 'unknown')}")
