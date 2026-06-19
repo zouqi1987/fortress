@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "fortress": {
+      "command": "python",
+      "args": ["-m", "src.tools.server"],
+      "env": {
+        "FORTRESS_DATA_DIR": "${HOME}/.fortress/data"
+      }
+    }
+  }
+}
