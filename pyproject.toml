@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "akshare>=1.16",
     "langgraph>=0.4",
+    "mcp>=1.0",
     "riskfolio-lib>=7.3",
 ]
 
