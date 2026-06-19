@@ -314,7 +314,17 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### 5.3 作为 Claude Code Skill 使用
+### 5.3 平台兼容
+
+| 平台 | 协议 | 状态 | 配置方式 |
+|------|------|------|---------|
+| **Claude Code** | MCP | ✅ 生产就绪 | `.mcp.json` 自动发现 |
+| **Hermes Agent** | MCP | ✅ 生产就绪 | `~/.hermes/config.yaml` |
+| **A2A Agents** | A2A | ⚠️ 实验性 | `python -m src.tools.a2a_adapter` |
+
+Fortress 核心引擎（engine/ + data/ + agent/）协议无关。适配层仅需 ~50 行。
+
+### 5.4 作为 Claude Code Skill 使用
 
 **自动发现**: Claude Code 启动时自动加载项目根目录的 `.mcp.json`。
 
@@ -334,7 +344,31 @@ claude
 # "用 fortress 审计基金 000001，计划买5万"
 ```
 
-### 5.4 命令行使用
+### 5.5 作为 Hermes Agent Skill 使用
+
+Hermes Agent 内置 MCP 客户端，可直接连接 fortress MCP server。
+
+**配置** — 编辑 `~/.hermes/config.yaml`：
+
+```yaml
+mcp_servers:
+  fortress:
+    command: /path/to/fortress/.venv/bin/python
+    args:
+    - -m
+    - src.tools.server
+    env:
+      FORTRESS_DATA_DIR: /path/to/fortress/data
+    enabled: true
+```
+
+**使用** — 在 Hermes 对话中直接说：
+> "用 fortress 帮我分析投资组合，做风险测评"
+> "fortress assess_risk horizon=medium max_loss_pct=15 income=4 experience=3 liquidity=3"
+
+Hermes 会自动发现 fortress 的 6 个 MCP 工具。
+
+### 5.6 命令行使用
 
 ```bash
 # 运行全部测试
