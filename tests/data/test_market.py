@@ -134,3 +134,56 @@ class TestCachedSource:
         source = CachedSource(cache)
         with pytest.raises(RuntimeError, match="Cache miss"):
             source.fetch_fund_info("000001")
+
+
+class TestFullFallbackChain:
+    """Integration: AKShare(❌) → Tiantian(❌) → Cache(✅)"""
+
+    def test_fallback_to_cache_when_live_sources_fail(self, tmp_path):
+        from src.data.cache import MarketCache
+
+        cache = MarketCache(str(tmp_path / "cache.db"))
+        cache.set(
+            "fund_info:000001",
+            '{"code":"000001","name":"Cached Fund","type":"bond",'
+            '"net_asset_value":"100000000","fee_rate":"0.010","inception_date":"2018-01-01"}',
+            ttl_seconds=3600,
+        )
+
+        primary = FakeSource("primary", succeed=False)
+        backup = FakeSource("backup", succeed=False)
+        cached = CachedSource(cache)
+
+        facade = MarketDataFacade([primary, backup, cached])
+        info = facade.fetch_fund_info("000001")
+        assert info.code == "000001"
+        assert info.name == "Cached Fund"
+        assert info.type == "bond"
+
+    def test_stops_at_first_success(self, tmp_path):
+        """Primary succeeds → never tries backup or cache."""
+        from src.data.cache import MarketCache
+
+        cache = MarketCache(str(tmp_path / "cache.db"))
+        cache.set(
+            "fund_info:000001",
+            '{"code":"000001","name":"cached","type":"mixed",'
+            '"net_asset_value":"1","fee_rate":"0.01","inception_date":"2020-01-01"}',
+            ttl_seconds=3600,
+        )
+
+        primary = FakeSource("primary", succeed=True)
+        backup_called = [False]
+
+        class SpyBackup(FakeSource):
+            def fetch_fund_info(self, code):
+                backup_called[0] = True
+                return super().fetch_fund_info(code)
+
+        backup = SpyBackup("backup", succeed=True)
+        cached = CachedSource(cache)
+
+        facade = MarketDataFacade([primary, backup, cached])
+        info = facade.fetch_fund_info("000001")
+        assert info.name == "Test Fund"  # from primary, not cache
+        assert not backup_called[0]  # never reached backup
