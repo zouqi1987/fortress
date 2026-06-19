@@ -1,10 +1,11 @@
 {
   "mcpServers": {
     "fortress": {
-      "command": ".venv/bin/python",
+      "command": "/Volumes/X9 Pro/Projects/fortress/.venv/bin/python",
       "args": ["-m", "src.tools.server"],
+      "cwd": "/Volumes/X9 Pro/Projects/fortress",
       "env": {
-        "FORTRESS_DATA_DIR": "data"
+        "FORTRESS_DATA_DIR": "/Volumes/X9 Pro/Projects/fortress/data"
       }
     }
   }
