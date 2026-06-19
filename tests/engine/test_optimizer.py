@@ -18,14 +18,14 @@ class TestOptimizer:
         assert result.weights == {}
         assert result.success is True
 
-    def test_single_asset_gets_100_pct(self):
-        """Single asset → 100% allocation."""
+    def test_single_asset_honors_max_weight(self):
+        """Single asset → capped at max_weight (default 0.30)."""
         returns = {"000001": [0.01, 0.02, -0.01, 0.005, 0.015]}
         config = OptimizerConfig(risk_measure="MV")
         result = optimize_portfolio(returns, config)
         assert result.success
         assert len(result.weights) == 1
-        assert float(list(result.weights.values())[0]) == pytest.approx(1.0, abs=0.01)
+        assert float(list(result.weights.values())[0]) == pytest.approx(0.30, abs=0.01)
 
     def test_config_defaults(self):
         config = OptimizerConfig()

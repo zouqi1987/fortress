@@ -29,8 +29,9 @@ def allocator_node(state: ConversationState) -> dict:
                + Decimal(str(pf.get("bond", 0) or 0))
                + Decimal(str(pf.get("cash", 0) or 0)))
 
+        # Default 10万 for scenario planning when no actual portfolio exists
         if total == Decimal("0"):
-            total = Decimal("100000")  # default for demo/planning
+            total = Decimal("100000")
 
         plan = build_allocation(level, total)
 

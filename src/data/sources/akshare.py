@@ -39,8 +39,9 @@ class AKShareSource:
         last_error = None
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                # Rate-limit: 2s between akshare calls
-                time.sleep(2)
+                # Rate-limit BEFORE each attempt after the first
+                if attempt > 1:
+                    time.sleep(2)
                 return fn(*args)
             except Exception as e:
                 last_error = e
@@ -126,7 +127,7 @@ class AKShareSource:
 
 
 def _parse_date(raw: str) -> date:
-    """Parse date from various Chinese date formats."""
+    """Parse date from various Chinese date formats. Raises on failure."""
     raw = str(raw).strip()
     for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d", "%Y年%m月%d日"):
         try:
@@ -137,7 +138,7 @@ def _parse_date(raw: str) -> date:
     try:
         return date.fromisoformat(raw[:10])
     except (ValueError, TypeError):
-        return date(2000, 1, 1)
+        raise ValueError(f"Cannot parse date: {raw!r}")
 
 
 def _parse_chinese_amount(raw: str) -> Decimal:

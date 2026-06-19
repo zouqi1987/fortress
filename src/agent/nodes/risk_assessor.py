@@ -31,8 +31,14 @@ def risk_assessor_node(state: ConversationState) -> dict:
             "cash": Decimal(str(portfolio.get("cash", 0))),
         }
 
-        # Run worst historical scenario
-        worst = max(HISTORICAL_SCENARIOS, key=lambda s: abs(s.equity_shock or Decimal("0")))
+        # Run worst historical scenario (ranked by total portfolio impact)
+        def _total_impact(s):
+            eq = abs(s.equity_shock or Decimal("0")) * pf["equity"]
+            bd = abs(s.bond_shock or Decimal("0")) * pf["bond"]
+            cs = abs(s.cash_shock or Decimal("0")) * pf["cash"]
+            return eq + bd + cs
+
+        worst = max(HISTORICAL_SCENARIOS, key=_total_impact)
         stress = run_stress_test(pf, worst)
 
         # Determine risk level from state or default to moderate

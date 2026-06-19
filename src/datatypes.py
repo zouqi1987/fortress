@@ -37,6 +37,8 @@ class IndexPoint:
 
 def fmt_amount(amount: Decimal) -> str:
     """Format Decimal amount in Chinese units (亿/万)."""
+    if amount == Decimal("0"):
+        return "0元"
     yi = Decimal("100_000_000")
     if amount >= yi:
         return f"{float(amount / yi):.1f}亿"
@@ -45,7 +47,12 @@ def fmt_amount(amount: Decimal) -> str:
 
 
 def classify_fund_type(raw: str) -> str:
-    """Map Chinese fund type descriptions to our classification."""
+    """Map Chinese fund type descriptions to our classification.
+
+    Returns "unknown" for unrecognized input instead of silently guessing.
+    """
+    if not raw or not raw.strip():
+        return "unknown"
     raw_lower = raw.lower().strip()
     if any(k in raw_lower for k in ("指数", "index")):
         return "index"
@@ -57,4 +64,4 @@ def classify_fund_type(raw: str) -> str:
         return "money"
     if any(k in raw_lower for k in ("混合", "mixed", "平衡")):
         return "mixed"
-    return "mixed"
+    return "unknown"

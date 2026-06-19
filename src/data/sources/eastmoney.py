@@ -8,7 +8,7 @@ import time
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from src.datatypes import FundInfo, IndexPoint, NAVPoint
+from src.datatypes import FundInfo, IndexPoint, NAVPoint, classify_fund_type
 
 logger = logging.getLogger(__name__)
 
@@ -97,12 +97,51 @@ class EastmoneySource:
         return points
 
     def _fetch_fund_info_impl(self, code: str) -> FundInfo:
-        """Delegate to eastmoney fund info API."""
-        # Reuse the same eastmoney API as tiantian
-        from src.data.sources.tiantian import TiantianSource
+        """Fetch fund basic info via eastmoney API (self-contained, no cross-source dep)."""
+        import urllib.request
 
-        tiantian = TiantianSource()
-        return tiantian.fetch_fund_info(code)
+        url = f"https://api.fund.eastmoney.com/f10/fundInfo?callback=jQuery&fundCode={code}"
+        req = urllib.request.Request(url)
+        req.add_header("Referer", "https://fundf10.eastmoney.com/")
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                raw = resp.read().decode("utf-8")
+        except Exception as e:
+            raise ConnectionError(f"eastmoney info request failed: {e}") from e
+
+        json_str = raw[raw.index("(") + 1 : raw.rindex(")")]
+        data = json.loads(json_str)
+
+        if data.get("ErrCode") != 0:
+            raise ValueError(f"eastmoney fund info error: {data.get('ErrMsg', 'unknown')}")
+
+        info = data.get("Data", {})
+        nav_str = info.get("AssetSize", "0")
+        try:
+            nav_value = Decimal(str(nav_str)) if nav_str else Decimal("0")
+        except Exception:
+            nav_value = Decimal("0")
+
+        fee_str = info.get("Rate", "0.015")
+        try:
+            fee_rate = Decimal(str(fee_str)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        except Exception:
+            fee_rate = Decimal("0.015")
+
+        inception_str = info.get("FoundDate", "2020-01-01")
+        try:
+            inception = date.fromisoformat(str(inception_str)[:10])
+        except (ValueError, TypeError):
+            inception = date(2020, 1, 1)
+
+        return FundInfo(
+            code=code,
+            name=info.get("FundName", code),
+            type=classify_fund_type(info.get("FundType", "mixed")),
+            net_asset_value=nav_value,
+            fee_rate=fee_rate,
+            inception_date=inception,
+        )
 
     def _fetch_index_daily_impl(self, code: str, start: date, end: date) -> list[IndexPoint]:
         """Fetch index daily via eastmoney push2 API."""

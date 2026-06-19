@@ -42,10 +42,12 @@ def optimize_portfolio(
 
     if len(returns) == 1:
         code = list(returns.keys())[0]
+        # Honor max_weight constraint even for single-asset portfolios
+        weight = min(config.max_weight, Decimal("1.0"))
         return OptimizationResult(
-            weights={code: Decimal("1.0")},
+            weights={code: weight},
             success=True,
-            message="single asset — 100% allocation",
+            message=f"single asset — {float(weight):.0%} allocation (max_weight={float(config.max_weight):.0%})",
         )
 
     try:
@@ -55,7 +57,7 @@ def optimize_portfolio(
         return OptimizationResult(
             weights=_equal_weight(returns),
             success=False,
-            message=f"riskfolio-lib not available: {e}. Using equal weight.",
+            message=f"[IMPORT_ERROR] riskfolio-lib not available: {e}. Using equal weight.",
         )
 
     try:
@@ -90,13 +92,13 @@ def optimize_portfolio(
                 message="optimization returned no weights",
             )
 
-        # Convert to Decimal weights, clamp to constraints
+        # Convert to Decimal weights, clamp to constraints (pure Decimal, no float)
         weights: dict[str, Decimal] = {}
         raw = w.to_dict()["weights"]
         for code in codes:
-            val = float(raw.get(code, 0))
-            clamped = max(float(config.min_weight), min(float(config.max_weight), val))
-            weights[code] = Decimal(str(round(clamped, 4)))
+            val = Decimal(str(raw.get(code, 0)))
+            clamped = max(config.min_weight, min(config.max_weight, val))
+            weights[code] = clamped.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
         # Rescale to sum = 1.0
         total = sum(weights.values(), start=Decimal("0"))

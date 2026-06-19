@@ -15,7 +15,7 @@ class ScreenConfig:
 
     min_net_asset_value: Decimal = Decimal("0")
     allowed_types: frozenset[str] = field(default_factory=lambda: frozenset({"stock", "bond", "mixed", "index", "money"}))
-    min_inception_date: date = date(2099, 12, 31)  # far future = no filter by default
+    min_inception_date: date | None = None  # None = no inception filter
     max_fee_rate: Decimal = Decimal("0.03")
 
 
@@ -40,8 +40,8 @@ def screen_funds(funds: list[FundInfo], config: ScreenConfig) -> list[ScreenResu
             continue
         if fund.type not in config.allowed_types:
             continue
-        # Exclude funds newer than min_inception_date
-        if fund.inception_date > config.min_inception_date:
+        # Exclude funds newer than min_inception_date (None = no filter)
+        if config.min_inception_date is not None and fund.inception_date > config.min_inception_date:
             continue
         if fund.fee_rate > config.max_fee_rate:
             continue

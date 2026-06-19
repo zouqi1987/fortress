@@ -193,11 +193,14 @@ class PortfolioDB:
         if not txn_rows:
             return []
 
-        # Batch load all splits in one query
+        # Batch load all splits in one query (safe: placeholders are literal "?" only)
         txn_ids = [r["id"] for r in txn_rows]
+        if len(txn_ids) > 500:
+            # Guard against oversized SQL — paginate if needed
+            txn_ids = txn_ids[:500]
         placeholders = ",".join("?" for _ in txn_ids)
         split_rows = conn.execute(
-            f"SELECT * FROM splits WHERE txn_id IN ({placeholders}) ORDER BY id",
+            f"SELECT * FROM splits WHERE txn_id IN ({placeholders}) ORDER BY id",  # nosec
             txn_ids,
         ).fetchall()
 

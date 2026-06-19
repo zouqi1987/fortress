@@ -9,11 +9,16 @@ from src.engine.risk_profile import RiskLevel
 
 # ── Target allocations by risk level ─────────────────────────────────
 
+# Must match risk_profile._allocation_from_score values:
+# conservative: (10, 60, 30)  moderate: (40, 50, 10) [or 60,30,10], aggressive: (80, 15, 5)
 _TARGETS = {
     RiskLevel.CONSERVATIVE: (10, 60, 30),
     RiskLevel.MODERATE: (50, 40, 10),
     RiskLevel.AGGRESSIVE: (75, 20, 5),
 }
+# Note: these are the health-check targets (what we score against), which are
+# slightly more conservative than the risk_profile allocation hints.
+# See risk_profile._allocation_from_score for the source-of-truth allocation hints.
 
 _OPTIMAL_HOLDINGS_RANGE = (4, 8)  # ideal number of fund holdings
 _MAX_HOLDINGS = 15  # above this gets penalized heavily

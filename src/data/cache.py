@@ -71,3 +71,16 @@ class MarketCache:
 
     def close(self) -> None:
         self._conn.close()
+
+    def __enter__(self) -> "MarketCache":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore[no-untyped-def]
+        self.close()
+        return False
+
+    def __del__(self) -> None:
+        try:
+            self._conn.close()
+        except Exception:
+            pass
