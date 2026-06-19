@@ -41,7 +41,7 @@ class TestGraphRouting:
 
         result = graph.invoke(state)
         assert result.get("debate_result") is not None
-        assert "多方" in result.get("debate_result", "")
+        assert "多方信号" in result.get("debate_result", "")
 
     def test_path_c_runs_diagnostic(self):
         graph = build_graph()

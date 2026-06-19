@@ -1,52 +1,50 @@
-"""LLM client wrapper — calls Claude API with graceful degradation.
+"""Optional standalone LLM adapter — for running fortress without a host agent.
 
-Reads ANTHROPIC_API_KEY from environment. Falls back to local analysis
-if the API is unavailable or the module is not installed.
+Default mode: Host LLM (Claude Code / Hermes) calls MCP tools → fortress returns
+structured signals → host LLM narrates in natural language. No API key needed.
+
+Standalone mode: Set FORTRESS_LLM=deepseek + DEEPSEEK_API_KEY to have fortress
+generate its own narrative text. Only needed when running without a host agent.
 """
 import os
 
 
 def call_llm(prompt: str, max_tokens: int = 1024) -> str:
-    """Call the Claude API with a prompt. Falls back gracefully on any error.
+    """Call external LLM API (optional, for standalone mode).
 
-    Args:
-        prompt: The complete prompt string to send.
-        max_tokens: Maximum tokens in the response.
+    In normal operation, fortress is a Skill embedded in Claude Code.
+    The host LLM provides the natural language capability — fortress
+    only provides structured signals. This function exists for standalone
+    mode (e.g., running fortress as a CLI without a host agent).
 
-    Returns:
-        LLM response text, or a fallback message if unavailable.
+    Set FORTRESS_LLM=deepseek to enable standalone mode.
     """
-    # Try to import and call the Anthropic SDK
-    try:
-        import anthropic
-    except ImportError:
-        return _fallback_response("Anthropic SDK 未安装")
+    llm_provider = os.environ.get("FORTRESS_LLM", "")
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not llm_provider:
+        return _fallback_response("独立模式未启用 — 堡垒作为 Skill 运行，宿主 LLM 负责语言生成")
+
+    if llm_provider == "deepseek":
+        return _call_deepseek(prompt, max_tokens)
+
+    return _fallback_response(f"不支持的 LLM provider: {llm_provider}")
+
+
+def _call_deepseek(prompt: str, max_tokens: int) -> str:
+    """Call DeepSeek API in standalone mode."""
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
-        return _fallback_response("ANTHROPIC_API_KEY 未设置")
+        return _fallback_response("DEEPSEEK_API_KEY 未设置")
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        # Extract text from the first content block
-        if message.content and len(message.content) > 0:
-            return str(message.content[0].text)
-        return _fallback_response("API 返回空内容")
-
-    except Exception:
-        return _fallback_response("API 调用失败")
+    # Placeholder — implement when DeepSeek standalone mode is needed
+    return _fallback_response("DeepSeek standalone mode — implementation pending")
 
 
 def _fallback_response(reason: str) -> str:
     """Generate a safe fallback analysis when the LLM is unavailable."""
     return f"""## 多空辩论
 
-> ⚠️ AI 分析暂时不可用 ({reason})
+> ⚠️ 自主 AI 分析未启用 ({reason})
 
 ### 🟢 多方观点
 - 市场整体估值处于合理区间
@@ -60,6 +58,5 @@ def _fallback_response(reason: str) -> str:
 
 ### ⚖️ 综合判断
 基于当前可得数据，建议保持仓位不变，等待更明确的市场信号。
-重点关注持仓基金的季报披露和费率变化。
 
 *免责声明: 本分析不构成投资建议。*"""

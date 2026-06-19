@@ -60,13 +60,19 @@ class TestDataCollectorNode:
 
 
 class TestDebaterNode:
-    def test_returns_bull_bear_analysis(self):
+    def test_returns_structured_signals(self):
         state = create_initial_state("B", "market opportunity")
-        state["market_data"] = {"000001": []}
+        state["market_data"] = {"000001": [{"date": "2026-06-19", "nav": 1.5}]}
+        state["holdings"] = [
+            {"code": "000001", "name": "华夏成长"},
+            {"code": "000002", "name": "债券稳健"},
+        ]
         result = debater_node(state)
         assert "debate_result" in result
         debate = result.get("debate_result", "")
         assert isinstance(debate, str) and len(debate) > 0
+        # Should contain signal markers, not LLM fallback text
+        assert "多方信号" in debate or "空方信号" in debate
 
     def test_no_market_data_graceful(self):
         state = create_initial_state("B", "opportunity")
