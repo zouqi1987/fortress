@@ -75,9 +75,9 @@ def optimize_portfolio(
         # Covariance matrix
         cov = np.cov(ret_matrix)
 
-        # Bounds: [min_weight, max_weight] for each asset
+        # Bounds: ensure max_weight is achievable (n * max >= 1.0)
         min_w = float(config.min_weight)
-        max_w = float(config.max_weight)
+        max_w = max(float(config.max_weight), 1.0 / n + 0.01)
         bounds = [(min_w, max_w)] * n
 
         # Constraints: sum(weights) == 1
@@ -110,10 +110,12 @@ def optimize_portfolio(
         if total > 0:
             raw = raw / total
 
+        # Use same effective max_weight as bounds (n * max_weight must >= 1.0)
+        effective_max = Decimal(str(max_w))
         weights: dict[str, Decimal] = {}
         for code, w in zip(codes, raw):
             val = Decimal(str(w))
-            clamped = max(config.min_weight, min(config.max_weight, val))
+            clamped = max(config.min_weight, min(effective_max, val))
             weights[code] = clamped.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
         # Final rescale

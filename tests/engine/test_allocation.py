@@ -54,3 +54,46 @@ class TestBuildAllocation:
         plan = build_allocation(RiskLevel.MODERATE, Decimal("0"))
         assert plan.total == Decimal("0")
         assert all(b.amount == Decimal("0") for b in plan.buckets)
+
+
+class TestOptimizeWeights:
+    """Integration test: allocation engine calls optimizer for within-bucket weights."""
+
+    def test_returns_differentiated_weights(self):
+        """Optimizer should produce non-equal weights from real return data."""
+        from src.engine.allocation import optimize_weights
+        import random
+        random.seed(42)
+
+        codes = ["safe", "risky", "medium"]
+        returns = {
+            "safe": [random.gauss(0.0003, 0.005) for _ in range(252)],   # low vol
+            "risky": [random.gauss(0.0005, 0.030) for _ in range(252)],  # high vol
+            "medium": [random.gauss(0.0004, 0.015) for _ in range(252)], # mid vol
+        }
+        weights = optimize_weights(codes, returns)
+        assert len(weights) == 3
+        wl = [float(w) for w in weights.values()]
+        assert max(wl) != min(wl), "all equal — optimizer not producing differentiated weights"
+        # Safe asset should get more weight in min-variance
+        assert float(weights["safe"]) > float(weights["risky"]), (
+            f"safe={float(weights['safe']):.2%} should > risky={float(weights['risky']):.2%}"
+        )
+        assert 0.99 < sum(wl) < 1.01
+
+    def test_fallback_on_empty_returns(self):
+        """Empty returns → equal weight fallback."""
+        from src.engine.allocation import optimize_weights
+        weights = optimize_weights(["A", "B"], {})
+        assert weights == {"A": Decimal("0.5"), "B": Decimal("0.5")}
+
+    def test_respects_max_weight(self):
+        """All weights within configured max."""
+        from src.engine.allocation import optimize_weights
+        import random
+        random.seed(99)
+        codes = [f"F{i}" for i in range(5)]
+        returns = {c: [random.gauss(0.0005, 0.02) for _ in range(252)] for c in codes}
+        weights = optimize_weights(codes, returns, max_weight=Decimal("0.40"))
+        for code, w in weights.items():
+            assert float(w) <= 0.41, f"{code}={float(w):.3f} exceeds max"

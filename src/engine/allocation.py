@@ -160,3 +160,42 @@ def build_allocation(risk_level: RiskLevel, total_principal: Decimal) -> Allocat
         buckets=tuple(buckets),
         total=total_principal,
     )
+
+
+def optimize_weights(
+    fund_codes: list[str],
+    returns: dict[str, list[float]],
+    max_weight: Decimal = Decimal("0.30"),
+) -> dict[str, Decimal]:
+    """Optimize within-bucket weights using min-variance.
+
+    Args:
+        fund_codes: Selected fund codes in this bucket.
+        returns: Asset code → list of historical returns.
+        max_weight: Single-asset cap (default 30%).
+
+    Returns:
+        {code: weight} dict with optimized weights summing to 1.0.
+        Falls back to equal weight if optimization fails or returns insufficient data.
+    """
+    from decimal import ROUND_HALF_UP
+    from src.engine.optimizer import OptimizerConfig, optimize_portfolio
+
+    config = OptimizerConfig(max_weight=max_weight)
+    result = optimize_portfolio(returns, config)
+
+    # Extract weights, defaulting to 0 for missing codes
+    weights = {c: result.weights.get(c, Decimal("0")) for c in fund_codes} if result.success else {}
+
+    # Fall back to equal weight if optimization failed or produced no usable weights
+    total = sum(weights.values(), start=Decimal("0"))
+    if not result.success or total <= Decimal("0"):
+        n = len(fund_codes)
+        w = (Decimal("1.0") / Decimal(str(n))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        return {c: w for c in fund_codes}
+
+    # Normalize to sum = 1.0
+    return {
+        c: (w / total).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        for c, w in weights.items()
+    }
