@@ -73,6 +73,7 @@ def fetch_fund_nav(code: str, start: date, end: date) -> list[NAVPoint]:
     else:
         logger.warning("fetch_fund_nav: reached MAX_PAGES=%d for fund %s", MAX_PAGES, code)
 
+    points.sort(key=lambda p: p.date)  # chronological order (oldest first)
     return points
 
 
