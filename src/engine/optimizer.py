@@ -1,9 +1,9 @@
-"""Portfolio optimization engine — Riskfolio-Lib wrapper.
+"""Portfolio optimization engine — min-variance via scipy.optimize.
 
 Zero I/O. Takes return series + config, returns optimized weights.
-Supports Black-Litterman with Entropy Pooling for LLM subjective views.
+Replaces Riskfolio-Lib dependency (broken with numpy>=2.x / cvxpy compat deadlock).
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 
@@ -11,10 +11,9 @@ from decimal import ROUND_HALF_UP, Decimal
 class OptimizerConfig:
     """Optimization parameters."""
 
-    risk_measure: str = "MV"  # "MV", "CVaR", "CDaR", "MDD"
     max_weight: Decimal = Decimal("0.30")  # single asset cap
     min_weight: Decimal = Decimal("0.01")  # minimum inclusion threshold
-    risk_free_rate: Decimal = Decimal("0.02")  # 2%
+    risk_free_rate: Decimal = Decimal("0.02")  # 2% (for Sharpe-ratio objective)
 
 
 @dataclass(frozen=True)
@@ -28,104 +27,121 @@ def optimize_portfolio(
     returns: dict[str, list[float]],
     config: OptimizerConfig,
 ) -> OptimizationResult:
-    """Run portfolio optimization via Riskfolio-Lib.
+    """Min-variance portfolio optimization via scipy SLSQP.
 
     Args:
-        returns: Asset code → list of historical daily/weekly returns (float).
-        config: Optimization parameters (risk measure, constraints).
+        returns: Asset code → list of historical returns (floats).
+        config: Optimization parameters (weight constraints).
 
     Returns:
-        OptimizationResult with optimized weights (sum = 1.0).
+        OptimizationResult with optimized weights (sum ≈ 1.0).
     """
     if not returns:
         return OptimizationResult(weights={}, success=True, message="no assets to optimize")
 
-    if len(returns) == 1:
-        code = list(returns.keys())[0]
-        # Honor max_weight constraint even for single-asset portfolios
+    codes = list(returns.keys())
+
+    if len(codes) == 1:
         weight = min(config.max_weight, Decimal("1.0"))
         return OptimizationResult(
-            weights={code: weight},
+            weights={codes[0]: weight},
             success=True,
-            message=f"single asset — {float(weight):.0%} allocation (max_weight={float(config.max_weight):.0%})",
+            message=f"single asset — {float(weight):.0%} (max_weight={float(config.max_weight):.0%})",
         )
 
     try:
-        import pandas as pd
-        import riskfolio as rp
+        import numpy as np
+        from scipy.optimize import minimize
     except ImportError as e:
         return OptimizationResult(
-            weights=_equal_weight(returns),
+            weights=_equal_weight(codes),
             success=False,
-            message=f"[IMPORT_ERROR] riskfolio-lib not available: {e}. Using equal weight.",
+            message=f"[IMPORT_ERROR] scipy not available: {e}",
         )
 
     try:
-        # Build return DataFrame
-        codes = list(returns.keys())
-        data: dict[str, list[float]] = {}
-        max_len = max(len(r) for r in returns.values())
-        for code in codes:
-            series = returns[code]
-            if len(series) < max_len:
-                series = [0.0] * (max_len - len(series)) + series
-            data[code] = series
-
-        returns_df = pd.DataFrame(data)
-
-        # Build portfolio object
-        port = rp.Portfolio(returns=returns_df)
-        port.assets = codes
-
-        # Run optimization
-        w = port.optimization(
-            model="Classic",
-            rm=config.risk_measure,
-            obj="MinRisk",
-            rf=float(config.risk_free_rate),  # float() OK: riskfolio API requires float
-        )
-
-        if w is None or w.empty:
+        n = len(codes)
+        min_len = min(len(r) for r in returns.values())
+        if min_len < 2:
             return OptimizationResult(
-                weights=_equal_weight(returns),
+                weights=_equal_weight(codes),
                 success=False,
-                message="optimization returned no weights",
+                message="insufficient data (< 2 observations)",
             )
 
-        # Convert to Decimal weights, clamp to constraints (pure Decimal, no float)
+        # Build aligned return matrix
+        ret_matrix = np.array([returns[c][:min_len] for c in codes])
+
+        # Covariance matrix
+        cov = np.cov(ret_matrix)
+
+        # Bounds: [min_weight, max_weight] for each asset
+        min_w = float(config.min_weight)
+        max_w = float(config.max_weight)
+        bounds = [(min_w, max_w)] * n
+
+        # Constraints: sum(weights) == 1
+        constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
+
+        # Initial guess: equal weight
+        w0 = np.ones(n) / n
+
+        # Minimize portfolio variance: w^T Σ w
+        result = minimize(
+            fun=lambda w: w @ cov @ w,
+            x0=w0,
+            method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
+            options={"maxiter": 1000, "ftol": 1e-12},
+        )
+
+        if not result.success:
+            return OptimizationResult(
+                weights=_equal_weight(codes),
+                success=False,
+                message=f"optimizer did not converge: {result.message}",
+            )
+
+        raw = result.x
+        # Normalize
+        raw = np.maximum(raw, 0)
+        total = raw.sum()
+        if total > 0:
+            raw = raw / total
+
         weights: dict[str, Decimal] = {}
-        raw = w.to_dict()["weights"]
-        for code in codes:
-            val = Decimal(str(raw.get(code, 0)))
+        for code, w in zip(codes, raw):
+            val = Decimal(str(w))
             clamped = max(config.min_weight, min(config.max_weight, val))
             weights[code] = clamped.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
-        # Rescale to sum = 1.0
-        total = sum(weights.values(), start=Decimal("0"))
-        if total > Decimal("0"):
+        # Final rescale
+        total_w = sum(weights.values(), start=Decimal("0"))
+        if total_w > Decimal("0"):
             weights = {
-                k: (v / total).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                k: (v / total_w).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
                 for k, v in weights.items()
             }
 
         return OptimizationResult(
             weights=weights,
             success=True,
-            message=f"optimized via {config.risk_measure}",
+            message="min-variance optimized via SLSQP",
         )
 
     except Exception as e:
         return OptimizationResult(
-            weights=_equal_weight(returns),
+            weights=_equal_weight(codes),
             success=False,
-            message=f"optimization error: {e}. Using equal weight.",
+            message=f"optimization error: {e}",
         )
 
 
-def _equal_weight(returns: dict[str, list[float]]) -> dict[str, Decimal]:
+def _equal_weight(codes: list[str]) -> dict[str, Decimal]:
     """Fallback: equal weight allocation."""
-    n = len(returns)
+    n = len(codes)
     if n == 0:
         return {}
     w = Decimal("1.0") / Decimal(str(n))
-    return {code: w.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP) for code in returns}
+    return {c: w.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP) for c in codes}

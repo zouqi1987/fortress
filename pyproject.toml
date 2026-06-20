@@ -7,7 +7,7 @@ dependencies = [
     "akshare>=1.16",
     "langgraph>=1.2",
     "mcp>=1.0",
-    "riskfolio-lib>=7.3",
+    "scipy>=1.0",
 ]
 
 [project.optional-dependencies]
