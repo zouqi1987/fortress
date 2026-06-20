@@ -105,7 +105,7 @@ def extract_signals(
             ))
 
     # ── Diversification signal ───────────────────────────────────────
-    if holding_count < 3:
+    if holding_count < 4:
         bear.append(Signal(
             name="分散度",
             value=f"{holding_count}只持仓",

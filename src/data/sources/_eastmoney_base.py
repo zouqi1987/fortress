@@ -33,7 +33,7 @@ def parse_jsonp(raw: str) -> dict:
 def fetch_fund_nav(code: str, start: date, end: date) -> list[NAVPoint]:
     """Fetch NAV via eastmoney fund API (shared by all eastmoney-based sources)."""
     page_index = 1
-    page_size = 100
+    page_size = 20  # eastmoney API caps at 20 per page regardless of parameter
     points: list[NAVPoint] = []
 
     while page_index <= MAX_PAGES:

@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "apple-vision-ocr": {
+      "command": "npx",
+      "args": ["-y", "ocrtool-mcp"]
+    },
     "fortress": {
       "command": "/Volumes/X9 Pro/Projects/fortress/.venv/bin/python",
       "args": ["-m", "src.tools.server"],
