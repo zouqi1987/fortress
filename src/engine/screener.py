@@ -154,14 +154,21 @@ def score_performance(navs: list[float]) -> int:
 
 
 def score_risk_control(navs: list[float]) -> int:
-    """Score risk control (0–20). Lower drawdown + lower volatility = higher."""
+    """Score risk control (0–20). Lower drawdown + lower volatility = higher.
+
+    Accepts float or Decimal NAVs — converts to float internally to avoid
+    Decimal ** float TypeError from the API data layer.
+    """
     if len(navs) < 63:
         return 0
 
+    # Convert to float (API returns Decimal, math needs float ** float)
+    prices = [float(v) for v in navs]
+
     # Max drawdown penalty (0–10)
-    peak = navs[0]
+    peak = prices[0]
     max_dd = 0.0
-    for v in navs[1:]:
+    for v in prices[1:]:
         if v > peak:
             peak = v
         dd = (v / peak - 1)
@@ -180,9 +187,9 @@ def score_risk_control(navs: list[float]) -> int:
 
     # Volatility penalty (0–10)
     daily_returns = [
-        navs[i] / navs[i - 1] - 1
-        for i in range(1, len(navs))
-        if navs[i - 1] > 0
+        prices[i] / prices[i - 1] - 1
+        for i in range(1, len(prices))
+        if prices[i - 1] > 0
     ]
     if len(daily_returns) < 10:
         return dd_score

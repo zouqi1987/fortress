@@ -58,6 +58,23 @@ class TestScoreRiskControl:
     def test_empty_returns_zero(self):
         assert score_risk_control([]) == 0
 
+    def test_decimal_nav_does_not_crash(self):
+        """Prove-It: API returns Decimal NAVs — must not crash on **0.5."""
+        navs = [Decimal("1.0")]
+        for _ in range(251):
+            navs.append(navs[-1] * Decimal("1.001"))
+        s = score_risk_control(navs)
+        assert isinstance(s, int)
+        assert 0 <= s <= 20
+
+    def test_decimal_and_float_produce_same_score(self):
+        """Float and Decimal NAV inputs → same score (within margin)."""
+        float_navs = [1.0]
+        for _ in range(251):
+            float_navs.append(float_navs[-1] * 1.001)
+        dec_navs = [Decimal(str(v)) for v in float_navs]
+        assert score_risk_control(float_navs) == score_risk_control(dec_navs)
+
 
 class TestScoreConsistency:
     def test_all_positive_quarters(self):
