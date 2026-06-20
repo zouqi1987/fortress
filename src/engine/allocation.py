@@ -86,7 +86,7 @@ def build_allocation(risk_level: RiskLevel, total_principal: Decimal) -> Allocat
     """Build a complete allocation plan.
 
     Args:
-        risk_level: Risk tolerance from 5-factor assessment.
+        risk_level: Risk tolerance from risk profile assessment.
         total_principal: Total investable amount in CNY.
 
     Returns:

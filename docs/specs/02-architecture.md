@@ -1,6 +1,6 @@
-# Architecture Decision Record — Fortress v2.0
+# Architecture Decision Record — Fortress
 
-> 基于 Phase 0.5 调研（MCP/A2A 对比、LangGraph 替代评估、akshare 稳定性审计、GitHub 高星项目对标）的最终架构决策。
+> 基于调研（MCP/A2A 对比、LangGraph 替代评估、akshare 稳定性审计、GitHub 高星项目对标）的最终架构决策。
 
 ## ADR-1: 通信协议 — MCP
 
@@ -241,4 +241,4 @@ RULE_FUND_MIN_SIZE = RedLine(
 
 ---
 
-*ADR v1.0 — Phase 1 完成。进入 Phase 2: 数据层实现。*
+*ADR — 2026-06-20 定稿*

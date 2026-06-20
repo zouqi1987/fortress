@@ -1,6 +1,6 @@
 # Fortress 项目说明文档
 
-> AI 投资顾问 Claude Code Skill v2.0 | 2026-06-20
+> AI 投资顾问 Claude Code Skill | 2026-06-20
 
 ## 目录
 
@@ -47,7 +47,7 @@ Fortress 是一个 **Claude Code Agent Skill**，通过 MCP (Model Context Proto
 
 | 工具 | 功能 | 输入参数 |
 |------|------|---------|
-| `assess_risk` | 5 因子风险测评 | horizon, max_loss_pct, income(1-5), experience(1-5), liquidity(1-5) |
+| `assess_risk` | 6 因子风险测评 | horizon, max_loss_pct, income(1-5), experience(1-5), liquidity(1-5) |
 | `get_allocation` | 三层架构 + 四桶模型配置 | risk_level, total_amount |
 | `get_advice` | 完整投顾报告 | path(A/B/C), message, equity?, bond?, cash? |
 | `audit_single_fund` | 单品红线审计 | code, name, type, size, fee, inception, amount, portfolio? |
@@ -58,7 +58,7 @@ Fortress 是一个 **Claude Code Agent Skill**，通过 MCP (Model Context Proto
 
 | 引擎 | 功能 | 输入 | 输出 |
 |------|------|------|------|
-| `risk_profile` | 5 因子风险评分 | 问卷答案 | RiskProfile + 建议配置比例 |
+| `risk_profile` | 6 因子风险评分 | 问卷答案 | RiskProfile + 建议配置比例 |
 | `allocation` | 三层架构分配 | RiskLevel + 总金额 | AllocationPlan（含 Bucket） |
 | `screener` | 基金筛选排名 | FundInfo[] + 条件 | 筛选结果（评分 + 警告） |
 | `auditor` | 单品红线审计 | FundInfo + 金额 | pass/warn/reject |
@@ -122,7 +122,7 @@ src/
 ├── datatypes.py                 # FundInfo, NAVPoint, IndexPoint, fmt_amount, classify_fund_type
 ├── engine/
 │   ├── ledger.py                # Account, Transaction, Split, validate_transaction
-│   ├── risk_profile.py          # 5 因子风险测评
+│   ├── risk_profile.py          # 6 因子风险测评
 │   ├── allocation.py            # 三层架构 + 四桶模型
 │   ├── screener.py              # 基金筛选排名
 │   ├── auditor.py               # 单品审计（5 条红线规则）
@@ -182,15 +182,16 @@ validate_transaction(txn) -> list[Violation]
 # 检查: ≥2 splits, 合计=0, 无零金额分录
 ```
 
-### 4.2 5 因子风险测评 (engine/risk_profile.py)
+### 4.2 6 因子风险测评 (engine/risk_profile.py)
 
 | 因子 | 权重 | 评分逻辑 |
 |------|------|---------|
-| 投资期限 | 0-20 | short→3, medium→10, long→18 |
-| 最大亏损容忍 | 0-20 | 5%→3, 10%→8, 15%→12, 25%→18, 30%+→18 |
+| 投资期限 | 0-20 | A(1年内)=2, B(1-2年)=6, C(2-3年)=10, D(3-5年)=14, E(5年+)=18 |
+| 最大亏损容忍 | 0-20 | 5%→3, 10%→8, 15%→12, 25%+→18 |
 | 收入稳定性 | 0-20 | (1-5) × 5 |
 | 投资经验 | 0-20 | (1-5) × 5 |
 | 流动性需求 | 0-20 | 逆映射 (5-n) × 5 |
+| 期望收益校验 | — | 5 条一致性规则（高产低险、短投激进、新手激进等） |
 
 - 总分 <30: CONSERVATIVE (股票 10% / 债券 60% / 现金 30%)
 - 总分 30-69: MODERATE (股票 40-60% / 债券 30-50% / 现金 10%)
@@ -440,7 +441,7 @@ HARD_RULES.append(RedLine(
 ### 测试统计
 
 ```text
-180 unit tests passed
+240 unit tests passed
 14 integration tests deselected (CI-safe)
 9 integration tests xfailed (documented API instability)
 1 integration test skipped (needs API key)
@@ -546,4 +547,4 @@ PersonalRule(
 
 ---
 
-*文档版本: 1.0 | 最后更新: 2026-06-20*
+*最后更新: 2026-06-20*

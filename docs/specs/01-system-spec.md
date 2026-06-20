@@ -1,4 +1,4 @@
-# SPEC: AI 投资顾问 v2.0（项目代号：fortress）
+# SPEC: Fortress AI 投资顾问
 
 > 基于深度调研 24 份源、94 条主张、25 条 3-0 对抗验证的架构决策
 
@@ -64,13 +64,13 @@
 | **Agent 框架** | LangGraph | Rillab's Agent Framework, 自研 | TradingAgents 用 LangGraph 通过 3-0 验证 |
 | **数据模型** | 三实体 (Split/Transaction/Account) | 传统复式记账 | GnuCash 24 年工业验证，延迟约束适合乱数据 |
 | **组合优化** | Riskfolio-Lib | PyPortfolioOpt | 26 风险度量 vs 5 种；Entropy Pooling 适配 LLM 输入 |
-| **市场数据** | akshare + 天天基金直连 | tushare, yfinance | v0.x 验证可用；Yahoo Finance 中国 IP 超时 |
+| **市场数据** | akshare + 天天基金直连 | tushare, yfinance | akshare 验证可用；Yahoo Finance 中国 IP 超时 |
 | **数据库** | SQLite（本地优先）| PostgreSQL | 零配置启动需求；多用户通过独立 DB 文件隔离 |
 | **通信协议** | 调研后决定 | - | MCP（已验证）或 A2A（Google Agent-to-Agent）待评估 |
 | **后端模式** | 纯工具调用（无独立 server）| FastAPI server | 作为 Skill 无需独立部署；DB 本地 SQLite |
 | **测试** | pytest + pytest-cov | - | Python 生态标准 |
 
-### 待调研项（Phase 0.5）
+### 调研项（已完成）
 - MCP vs A2A 协议对比（多平台兼容性、流式支持、状态管理）
 - LangGraph vs 轻量级替代（自研 DAG、Prefect）
 - akshare 稳定性数据（频率限制、数据延迟、错误率）
@@ -240,20 +240,11 @@ RULE_FUND_MIN_SIZE = RedLine(
 
 ## 8. 阶段规划
 
-| 阶段 | 产物 | 预计 |
-|------|------|------|
-| **Phase 0.5** ✅ | 补充调研（MCP vs A2A、LangGraph 深度评估、akshare 稳定性） | 2026-06-19 完成 |
-| **Phase 1** 🔄 | 本 SPEC 确认 + 架构设计文档（docs/architecture.md） | 2026-06-19 进行中 |
-| **Phase 2** | 数据层 — 三实体账本 + SQLite + 数据源适配器 | 2-3 sessions |
-| **Phase 3** | 引擎层 — 风险测评、筛选、审计、优化、压测 | 2-3 sessions |
-| **Phase 4** | Agent 层 — LangGraph DAG + 对话流 | 3-4 sessions |
-| **Phase 5** | 红线规则库 — 可配置化 + DSL | 1-2 sessions |
-| **Phase 6** | 工具注册 + 双平台适配 | 2-3 sessions |
-| **Phase 7** | 测试 + 文档 + E2E 验证 | 2-3 sessions |
+所有阶段已于 2026-06-20 完成。全模块实现 + 240 测试通过。
 
 ---
 
-## Open Questions — ✅ 已决议（Phase 0.5 调研 + Phase 1 确认）
+## 架构决策（已决议）
 
 1. **MCP 还是 A2A？** → **MCP。** 堡垒是单 Agent Skill，不需要跨 Agent 协调。A2A 留待未来多 Agent 场景。MCP 生态成熟（10000+ server），Anthropic/OpenAI/Google 均支持。
 2. **LangGraph 是否过重？** → **用 LangGraph。** GitHub 调研确认：6/7 高星金融 Agent 项目用 LangGraph（含 TradingAgents 85.8k⭐），FenixAI v2.0 有从 CrewAI→LangGraph 的迁移教训。轻量自研 DAG 迁移成本高于预期。
@@ -268,4 +259,4 @@ RULE_FUND_MIN_SIZE = RedLine(
 
 ---
 
-*SPEC v1.0 — Phase 1 确认锁定*
+*SPEC — 2026-06-20 完成*

@@ -1,7 +1,6 @@
 """Single-product audit engine with redline rule checks.
 
 Zero I/O. Takes FundInfo + planned position, returns AuditResult.
-Redline rules are inline for now (Phase 5 will extract to DSL).
 """
 from dataclasses import dataclass
 from datetime import date
@@ -9,7 +8,7 @@ from decimal import Decimal
 
 from src.datatypes import FundInfo, fmt_amount
 
-# ── Rule constants (will move to src/redlines/ in Phase 5) ───────────
+# ── Rule constants ───────────────────────────────────────────────────
 
 MIN_FUND_SIZE = Decimal("200_000_000")  # 2亿
 MAX_POSITION_IN_SMALL_FUND = Decimal("50_000")  # 5万
