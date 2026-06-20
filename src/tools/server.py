@@ -1,21 +1,28 @@
-"""Fortress MCP Server — 6 self-documenting tools for AI investment advisory.
+"""Fortress MCP Server — 12 self-documenting tools for AI investment advisory.
 
 Usage:
     python -m src.tools.server          # stdio transport (MCP clients)
     python src/tools/server.py --sse    # SSE transport (HTTP clients)
 
-Three User Paths:
-    A 底仓配置(求确定性): assess_risk → get_allocation → get_advice → run_scenario
-    B 机会捕捉(求收益):   get_advice(path=B) → audit_single_fund → run_scenario
-    C 持仓诊断(求安心):   get_advice(path=C) → audit_single_fund → run_scenario
+Three User Paths (with all relevant tools):
+    A 底仓配置(求确定性): assess_risk → get_allocation → screen_funds → get_advice → run_scenario
+    B 机会捕捉(求收益):   lookup_index → detect_regime → lookup_fund → screen_funds → get_advice(path=B) → audit_single_fund
+    C 持仓诊断(求安心):   get_advice(path=C) → check_health → audit_single_fund → run_scenario
+    * 通用工具: list_hard_rules, manage_personal_rules (任意路径可用)
 """
 from mcp.server.fastmcp import FastMCP
 
 from src.tools.advisory import get_advice as _get_advice
 from src.tools.audit import audit_single_fund as _audit_single_fund
+from src.tools.health import check_health as _check_health
+from src.tools.macro import detect_regime as _detect_regime
 from src.tools.market import lookup_fund as _lookup_fund
+from src.tools.market import lookup_index as _lookup_index
+from src.tools.personal_rules import manage_personal_rules as _manage_personal_rules
+from src.tools.screener import screen_funds as _screen_funds
 from src.tools.portfolio import get_allocation as _get_allocation
 from src.tools.risk import assess_risk as _assess_risk
+from src.tools.rules import list_hard_rules as _list_hard_rules
 from src.tools.scenario import run_scenario as _run_scenario
 
 server = FastMCP("fortress")
@@ -196,7 +203,7 @@ def run_scenario(
 # ── Tool 6: Market Data ──────────────────────────────────────────────
 
 @server.tool()
-def lookup_fund(code: str) -> dict:
+def lookup_fund(code: str, start: str = "", end: str = "") -> dict:
     """【前置工具】查询基金基本信息和近期净值（三级数据降级）。
 
     WHEN TO USE:
@@ -209,13 +216,218 @@ def lookup_fund(code: str) -> dict:
     - 备源: 天天基金 / eastmoney API
     - 兜底: 本地SQLite缓存(24h TTL)
 
+    HOW TO USE:
+    - start/end: 可选，净值历史区间 "YYYY-MM-DD"。留空默认近30天。
+
     RETURNS: {code, name, type, net_asset_value, fee_rate,
-              inception_date, recent_nav[]}
+              inception_date, date_range, recent_nav[], data_source[, cached_at, stale_warning]}
+    - data_source: "akshare"|"tiantian"|"cache" — 实际数据来源
+    - stale_warning: 若 data_source="cache"，包含缓存时间的中文警告
+    - ⚠️ 必须检查 data_source！若为 "cache"，务必向用户明确告知：
+      "当前数据来自{缓存时间}的本地缓存，非实时数据。建议稍后重试获取最新行情。"
     - 如果所有数据源失败，返回 {error, code}
 
     ⚠️ 基金代码格式: 中国基金为6位数字，如"000001"
     """
-    return _lookup_fund(code)
+    return _lookup_fund(code, start, end)
+
+
+# ── Tool 7: Index Data ────────────────────────────────────────────────
+
+@server.tool()
+def lookup_index(code: str, start: str = "", end: str = "") -> dict:
+    """查询指数日线数据（如上证指数、深证成指）。
+
+    WHEN TO USE:
+    - 用户问"最近大盘怎么样"、"上证指数走势如何"
+    - detect_regime 前获取指数数据和均线
+    - 市场分析需要指数历史数据
+
+    DATA SOURCE FALLBACK:
+    - 主源: akshare
+    - 备源: eastmoney
+    - 兜底: 本地SQLite缓存(24h TTL)
+
+    HOW TO USE:
+    - code: 指数代码，如 "000001" (上证指数), "399001" (深证成指)
+    - start/end: 可选，日期区间 "YYYY-MM-DD"。留空默认近90天。
+
+    RETURNS: {code, date_range, count, data[{date, close, volume}], data_source[, stale_warning]}
+    - data_source: "akshare"|"eastmoney"|"cache" — 实际数据来源
+    - stale_warning: 若 data_source="cache"，包含缓存时间的中文警告
+    - ⚠️ 必须检查 data_source！若为 "cache"，务必向用户明确告知数据来自缓存及缓存时间。
+    """
+    return _lookup_index(code, start, end)
+
+
+# ── Tool 8: Hard Rules ────────────────────────────────────────────────
+
+@server.tool()
+def list_hard_rules() -> dict:
+    """列出全部5条硬红线规则的ID、严重程度和说明。
+
+    WHEN TO USE:
+    - 用户问"有哪些红线规则"、"硬性限制是什么"
+    - 审计前了解规则定义
+    - 向用户解释为什么某基金被拒绝
+
+    5 HARD RULES:
+    - RL-001 (REJECT): 基金规模 < 2亿 且 持仓 > 5万
+    - RL-002 (WARN): 基金成立不足1年
+    - RL-003 (WARN): 管理费率超过 1.5%
+    - RL-004 (WARN): 单只基金占组合比例超过 20%
+    - RL-005 (WARN): 基金规模 < 5亿 且 持仓 > 2万
+
+    RETURNS: {count, rules[{id, severity, message}]}
+    """
+    return _list_hard_rules()
+
+
+# ── Tool 9: Portfolio Health ─────────────────────────────────────────
+
+@server.tool()
+def check_health(
+    equity_pct: int,
+    bond_pct: int,
+    cash_pct: int,
+    risk_level: str,
+    fee_ratio: float,
+    max_drawdown_pct: float,
+    num_holdings: int,
+) -> dict:
+    """【全路径通用】四维度组合健康度评分：偏离度 + 分散度 + 费率 + 回撤。
+
+    WHEN TO USE:
+    - 用户问"我的组合健康吗"、"帮我检查下持仓健康度"
+    - 定期诊断时独立触发（无需跑完整 get_advice 管线）
+    - 调仓后验证组合改善程度
+
+    FOUR DIMENSIONS:
+    - drift_score (0-35): 当前配置偏离风险目标的程度
+    - diversification_score (0-30): 持仓数量是否在理想范围(4-8只)
+    - fee_score (0-25): 加权费率评分
+    - drawdown_score (0-10): 近期最大回撤评分
+
+    HOW TO USE:
+    - equity_pct/bond_pct/cash_pct: 当前配置百分比，三项之和应为100
+    - risk_level: "conservative" | "moderate" | "aggressive"
+    - fee_ratio: 加权平均费率 (e.g. 0.012 = 1.2%)
+    - max_drawdown_pct: 近期最大回撤 (e.g. 15.0 = 15%)
+    - num_holdings: 持仓基金数量
+
+    RETURNS: {overall_score, grade, drift_score, diversification_score,
+              fee_score, drawdown_score, warnings[]}
+    - grade: "A"(>=80) | "B"(>=60) | "C"(>=40) | "D"(>=20) | "F"(<20)
+    """
+    return _check_health(
+        equity_pct, bond_pct, cash_pct, risk_level,
+        fee_ratio, max_drawdown_pct, num_holdings,
+    )
+
+
+# ── Tool 10: Market Regime ───────────────────────────────────────────
+
+@server.tool()
+def detect_regime(
+    current: float | None = None,
+    ma200: float | None = None,
+    ma120: float | None = None,
+    risk_level: str = "",
+) -> dict:
+    """检测当前市场周期（牛/熊/震荡）及宏观风险乘数。
+
+    COMPARES index level vs 200-day and 120-day moving averages:
+    - BULL: 指数 > MA200 → 乘数 1.0（标准配置）
+    - SIDEWAYS: MA120 < 指数 < MA200 → 乘数 0.8（略保守）
+    - BEAR: 指数 < MA120 → 乘数 0.6（保守，偏债券）
+
+    WHEN TO USE:
+    - 用户问"现在是什么市场周期"、"当前市场是牛还是熊"
+    - 调仓前评估宏观环境
+    - 结合风险等级计算配置调整乘数
+
+    HOW TO USE:
+    - current: 当前指数点位（如上证指数）。无数据时默认 SIDEWAYS。
+    - ma200/ma120: 移动平均线。可通过 lookup_index 获取历史数据后自行计算。
+    - risk_level: 若提供，同时返回该风险等级下的配置乘数。
+
+    RETURNS: {regime, description[, multiplier]}
+    - regime: "bull" | "bear" | "sideways"
+    - multiplier: 0.6-1.0，应用于股票配置比例
+    """
+    return _detect_regime(current, ma200, ma120, risk_level)
+
+
+# ── Tool 11: Personal Rules ──────────────────────────────────────────
+
+@server.tool()
+def manage_personal_rules(
+    action: str,
+    rule_id: str = "",
+    description: str = "",
+    fund_types_blacklist: str = "",
+    max_single_position: float | None = None,
+    min_fund_size: float | None = None,
+) -> dict:
+    """管理个人投资红线规则：增/删/查/清。
+
+    Personal rules supplement hard rules — users define their own constraints.
+
+    WHEN TO USE:
+    - 用户说"我不投股票型基金"、"单只基金最多10万"
+    - 用户想查看或修改自己的个性化限制
+    - 配置风险偏好后的补充约束
+
+    ACTIONS:
+    - "list": 列出所有活跃个人规则
+    - "add": 添加规则。需 rule_id + 至少一项约束。
+    - "remove": 删除规则。需 rule_id。
+    - "clear": 清空所有个人规则。
+
+    HOW TO USE (add):
+    - fund_types_blacklist: 逗号分隔，如 "stock,mixed" 表示不投股票和混合型
+    - max_single_position: 单只基金持仓上限（元）
+    - min_fund_size: 最低基金规模要求（元），如 500000000 表示不低于5亿
+
+    RETURNS: 依 action 不同返回 {active_count, rules[]} 或 {status, message}
+    """
+    return _manage_personal_rules(
+        action, rule_id, description, fund_types_blacklist,
+        max_single_position, min_fund_size,
+    )
+
+
+# ── Tool 12: Fund Screening ───────────────────────────────────────────
+
+@server.tool()
+def screen_funds(
+    funds: list,
+    min_net_asset_value: float = 0,
+    allowed_types: str = "",
+    max_fee_rate: float = 0.03,
+    nav_data: dict | None = None,
+) -> dict:
+    """筛选并评分一组基金。v1 静态评分；提供 nav_data 时启用 v2 五维评分。
+
+    v1 (default): 规模 + 成立年限 + 费率 + 类型，0-100 分。
+    v2 (with nav_data): 五维评分 — 静态40 + 业绩25 + 风控20 + 持续性10 + 经理5。
+
+    WHEN TO USE:
+    - 用户问"哪些基金最好"、"帮我选基金"
+    - 拿到 lookup_fund 结果后，做横向比较
+    - 配置方案确定后，筛选具体产品
+
+    HOW TO USE:
+    - funds: 基金信息列表，每项含 code, name, type, net_asset_value, fee_rate, inception_date
+    - min_net_asset_value: 最低规模过滤（元），默认0不过滤
+    - allowed_types: 逗号分隔，如 "bond,mixed"，空=全部
+    - max_fee_rate: 最高可接受费率，默认 0.03 (3%)
+    - nav_data: 可选，{code: [净值序列]} 用于 v2 五维评分
+
+    RETURNS: {count, results[{code, name, type, score, warnings[]}]}
+    - results 按 score 降序排列
+    """
+    return _screen_funds(funds, min_net_asset_value, allowed_types, max_fee_rate, nav_data)
 
 
 # ── Entry Point ──────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ class TestMCPServer:
         assert server is not None
         assert server.name == "fortress"
 
-    def test_all_six_tools_registered(self):
+    def test_all_twelve_tools_registered(self):
         from src.tools.server import server
         from mcp.server.fastmcp.tools.tool_manager import ToolManager
 
@@ -21,8 +21,15 @@ class TestMCPServer:
             "audit_single_fund",
             "run_scenario",
             "lookup_fund",
+            "lookup_index",
+            "list_hard_rules",
+            "check_health",
+            "detect_regime",
+            "manage_personal_rules",
+            "screen_funds",
         }
         assert expected.issubset(tool_names), f"Missing: {expected - tool_names}"
+        assert len(tool_names) >= 12, f"Expected >=12 tools, got {len(tool_names)}"
 
     @pytest.mark.parametrize("tool_name", [
         "assess_risk",
@@ -31,6 +38,12 @@ class TestMCPServer:
         "audit_single_fund",
         "run_scenario",
         "lookup_fund",
+        "lookup_index",
+        "list_hard_rules",
+        "check_health",
+        "detect_regime",
+        "manage_personal_rules",
+        "screen_funds",
     ])
     def test_each_tool_has_description(self, tool_name):
         from src.tools.server import server
@@ -47,6 +60,12 @@ class TestMCPServer:
         "audit_single_fund",
         "run_scenario",
         "lookup_fund",
+        "lookup_index",
+        "list_hard_rules",
+        "check_health",
+        "detect_regime",
+        "manage_personal_rules",
+        "screen_funds",
     ])
     def test_each_tool_has_parameters(self, tool_name):
         from src.tools.server import server

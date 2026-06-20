@@ -64,6 +64,23 @@ class MarketCache:
         )
         self._conn.commit()
 
+    def get_timestamp(self, key: str) -> float | None:
+        """Return cached_at timestamp for a key, or None if not found/expired.
+
+        Useful for determining whether data came from cache vs live API.
+        """
+        now = time.time()
+        row = self._conn.execute(
+            "SELECT cached_at, ttl_seconds FROM market_cache WHERE key = ?",
+            (key,),
+        ).fetchone()
+        if row is None:
+            return None
+        cached_at, ttl_seconds = row
+        if now - cached_at > ttl_seconds:
+            return None
+        return cached_at
+
     def invalidate(self, key_pattern: str) -> int:
         """Delete all keys matching LIKE pattern. Returns count deleted."""
         cursor = self._conn.execute(

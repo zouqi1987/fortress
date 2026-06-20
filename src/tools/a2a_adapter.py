@@ -110,13 +110,99 @@ AGENT_CARD: dict = {
         },
         {
             "name": "lookup_fund",
-            "description": "基金数据查询（三级降级）",
+            "description": "基金数据查询（三级降级，支持自定义日期区间）",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "code": {"type": "string"},
+                    "start": {"type": "string", "description": "YYYY-MM-DD (default: 30 days ago)"},
+                    "end": {"type": "string", "description": "YYYY-MM-DD (default: today)"},
                 },
                 "required": ["code"],
+            },
+        },
+        {
+            "name": "lookup_index",
+            "description": "指数日线数据查询（三级降级）",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "e.g. 000001 for 上证指数"},
+                    "start": {"type": "string", "description": "YYYY-MM-DD (default: 90 days ago)"},
+                    "end": {"type": "string", "description": "YYYY-MM-DD (default: today)"},
+                },
+                "required": ["code"],
+            },
+        },
+        {
+            "name": "list_hard_rules",
+            "description": "列出全部5条硬红线规则",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+        {
+            "name": "check_health",
+            "description": "四维度组合健康度评分",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "equity_pct": {"type": "integer"},
+                    "bond_pct": {"type": "integer"},
+                    "cash_pct": {"type": "integer"},
+                    "risk_level": {"type": "string"},
+                    "fee_ratio": {"type": "number"},
+                    "max_drawdown_pct": {"type": "number"},
+                    "num_holdings": {"type": "integer"},
+                },
+                "required": ["equity_pct", "bond_pct", "cash_pct", "risk_level", "fee_ratio", "max_drawdown_pct", "num_holdings"],
+            },
+        },
+        {
+            "name": "detect_regime",
+            "description": "检测市场周期（牛/熊/震荡）及宏观乘数",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "current": {"type": "number"},
+                    "ma200": {"type": "number"},
+                    "ma120": {"type": "number"},
+                    "risk_level": {"type": "string"},
+                },
+                "required": [],
+            },
+        },
+        {
+            "name": "manage_personal_rules",
+            "description": "管理个人投资红线规则（增/删/查/清）",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "add/remove/list/clear"},
+                    "rule_id": {"type": "string"},
+                    "description": {"type": "string"},
+                    "fund_types_blacklist": {"type": "string"},
+                    "max_single_position": {"type": "number"},
+                    "min_fund_size": {"type": "number"},
+                },
+                "required": ["action"],
+            },
+        },
+        {
+            "name": "screen_funds",
+            "description": "筛选并评分基金列表（v1静态/v2五维）",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "funds": {"type": "array"},
+                    "min_net_asset_value": {"type": "number"},
+                    "allowed_types": {"type": "string"},
+                    "max_fee_rate": {"type": "number"},
+                    "nav_data": {"type": "object"},
+                },
+                "required": ["funds"],
             },
         },
     ],
@@ -131,6 +217,12 @@ _TOOLS = {
     "audit_single_fund": ("src.tools.audit", "audit_single_fund"),
     "run_scenario": ("src.tools.scenario", "run_scenario"),
     "lookup_fund": ("src.tools.market", "lookup_fund"),
+    "lookup_index": ("src.tools.market", "lookup_index"),
+    "list_hard_rules": ("src.tools.rules", "list_hard_rules"),
+    "check_health": ("src.tools.health", "check_health"),
+    "detect_regime": ("src.tools.macro", "detect_regime"),
+    "manage_personal_rules": ("src.tools.personal_rules", "manage_personal_rules"),
+    "screen_funds": ("src.tools.screener", "screen_funds"),
 }
 
 

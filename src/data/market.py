@@ -35,12 +35,22 @@ class MarketDataSource(Protocol):
 
 
 class MarketDataFacade:
-    """Try sources in order. First success wins. Raises if all fail."""
+    """Try sources in order. First success wins. Raises if all fail.
+
+    Track last_source so callers can detect cache vs live data.
+    """
 
     def __init__(self, sources: list[MarketDataSource]) -> None:
         if not sources:
             raise ValueError("At least one data source required")
         self._sources = sources
+        self._last_source: str = ""
+        self._last_method: str = ""
+
+    @property
+    def last_source(self) -> str:
+        """Name of the source that succeeded in the most recent call."""
+        return self._last_source
 
     def fetch_fund_nav(self, code: str, start: date, end: date) -> list[NAVPoint]:
         return self._try_all("fetch_fund_nav", code, start, end)
@@ -54,10 +64,14 @@ class MarketDataFacade:
     def _try_all(self, method: str, *args):
         """Try each source; on success return result. On failure, log and try next."""
         errors: list[str] = []
+        self._last_source = ""
+        self._last_method = method
         for source in self._sources:
             try:
                 fn = getattr(source, method)
-                return fn(*args)
+                result = fn(*args)
+                self._last_source = source.name
+                return result
             except Exception as e:
                 msg = f"[{source.name}] {method} failed: {e}"
                 logger.warning(msg)
