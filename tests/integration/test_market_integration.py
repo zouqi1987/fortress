@@ -22,7 +22,7 @@ KNOWN_INDEX = "000300"  # 沪深300
 
 
 class TestAKShareSourceIntegration:
-    @pytest.mark.xfail(reason="akshare API instability — known Phase 0.5 finding")
+    @pytest.mark.xfail(reason="akshare API instability — known network-dependent")
     def test_fetch_fund_info_real(self):
         source = AKShareSource()
         info = source.fetch_fund_info(KNOWN_FUND)
