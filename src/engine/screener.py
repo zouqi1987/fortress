@@ -26,12 +26,20 @@ class ScreenResult:
     warnings: tuple[str, ...]
 
 
-def screen_funds(funds: list[FundInfo], config: ScreenConfig) -> list[ScreenResult]:
+def screen_funds(
+    funds: list[FundInfo],
+    config: ScreenConfig,
+    nav_data: dict[str, list[float]] | None = None,
+    manager_data: dict[str, object] | None = None,
+) -> list[ScreenResult]:
     """Filter and score a list of funds.
 
-    Returns results sorted by score descending. Funds that fail hard filters
-    are excluded entirely. Warnings are informational and don't exclude.
+    v1 mode (default): static scoring only (size/age/fee/type), 100 points.
+    v2 mode (nav_data + manager_data provided): full 5-dimension scoring.
+
+    Returns results sorted by score descending.
     """
+    use_v2 = nav_data is not None
     results: list[ScreenResult] = []
 
     for fund in funds:
@@ -40,42 +48,38 @@ def screen_funds(funds: list[FundInfo], config: ScreenConfig) -> list[ScreenResu
             continue
         if fund.type not in config.allowed_types:
             continue
-        # Exclude funds newer than min_inception_date (None = no filter)
         if config.min_inception_date is not None and fund.inception_date > config.min_inception_date:
             continue
         if fund.fee_rate > config.max_fee_rate:
             continue
 
-        # ── Scoring (0–100) ─────────────────────────────────────────
-        score = 0
         warnings: list[str] = []
 
-        # Size score (0–30): bigger is better, up to 10B
-        size_val = min(fund.net_asset_value, Decimal("10_000_000_000"))
-        score += int(size_val * Decimal("30") / Decimal("10_000_000_000"))
+        if use_v2 and fund.code in nav_data:
+            # ── v2: 5-dimension scoring (0–100) ─────────────────────
+            nv = nav_data[fund.code]
+            mgr = manager_data.get(fund.code) if manager_data else None
 
-        # Age score (0–20): older is better, up to 10 years
-        age_days = (date.today() - fund.inception_date).days
-        score += min(20, age_days // 180)  # ~0.5 point per half-year
+            # Static (0–40): scaled from v1
+            static = _score_static(fund)
+            static_scaled = int(static * 40 / 100)
 
-        # Fee score (0–25): lower is better
-        if fund.fee_rate <= Decimal("0.005"):
-            score += 25
-        elif fund.fee_rate <= Decimal("0.010"):
-            score += 20
-        elif fund.fee_rate <= Decimal("0.015"):
-            score += 15
-        elif fund.fee_rate <= Decimal("0.020"):
-            score += 10
+            # Performance (0–25)
+            perf = score_performance(nv)
+
+            # Risk control (0–20)
+            risk = score_risk_control(nv)
+
+            # Consistency (0–10)
+            cons = score_consistency(nv)
+
+            # Manager (0–5)
+            mgr_score = score_manager(mgr)
+
+            score = static_scaled + perf + risk + cons + mgr_score
         else:
-            score += 5
-
-        # Type diversification bonus (0–15)
-        type_bonus = {"bond": 15, "mixed": 12, "index": 10, "stock": 8, "money": 5}
-        score += type_bonus.get(fund.type, 5)
-
-        # Remaining to 100: complexity bonus
-        score += 10
+            # ── v1: static-only scoring (0–100) ─────────────────────
+            score = _score_static(fund)
 
         # ── Warnings ─────────────────────────────────────────────────
         if fund.net_asset_value < Decimal("200_000_000"):
@@ -83,12 +87,40 @@ def screen_funds(funds: list[FundInfo], config: ScreenConfig) -> list[ScreenResu
         if (date.today() - fund.inception_date).days < 365:
             warnings.append(f"基金成立不足1年 ({fund.inception_date})")
         if fund.fee_rate > Decimal("0.015"):
-            warnings.append(f"费率偏高 ({float(fund.fee_rate):.1%})")  # float() OK: format-only
+            warnings.append(f"费率偏高 ({float(fund.fee_rate):.1%})")
 
         results.append(ScreenResult(fund=fund, score=score, warnings=tuple(warnings)))
 
     results.sort(key=lambda r: r.score, reverse=True)
     return results
+
+
+def _score_static(fund: FundInfo) -> int:
+    """v1 static scoring: size(30) + age(20) + fee(25) + type(15) + bonus(10)."""
+    score = 0
+
+    size_val = min(fund.net_asset_value, Decimal("10_000_000_000"))
+    score += int(size_val * Decimal("30") / Decimal("10_000_000_000"))
+
+    age_days = (date.today() - fund.inception_date).days
+    score += min(20, age_days // 180)
+
+    if fund.fee_rate <= Decimal("0.005"):
+        score += 25
+    elif fund.fee_rate <= Decimal("0.010"):
+        score += 20
+    elif fund.fee_rate <= Decimal("0.015"):
+        score += 15
+    elif fund.fee_rate <= Decimal("0.020"):
+        score += 10
+    else:
+        score += 5
+
+    type_bonus = {"bond": 15, "mixed": 12, "index": 10, "stock": 8, "money": 5}
+    score += type_bonus.get(fund.type, 5)
+    score += 10
+
+    return score
 
 
 # ── v2 Performance Scoring Functions ──────────────────────────────────
