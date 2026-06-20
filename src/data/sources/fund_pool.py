@@ -68,6 +68,7 @@ def fetch_fund_pool(
     )
 
     # ── Build PoolFund list ─────────────────────────────────────────
+    all_names: set[str] = set(str(n) for n in df["基金简称"])
     funds: list[PoolFund] = []
     for _, row in df.iterrows():
         try:
@@ -85,8 +86,8 @@ def fetch_fund_pool(
             if allowed_types and fund_type not in allowed_types:
                 continue
 
-            # Skip C/E/D/B share classes (duplicates of A/base fund)
-            if _is_duplicate_share(name):
+            # Skip C/E/D/B share classes only when A/base equivalent exists
+            if _is_duplicate_share(name, all_names):
                 continue
 
             # For index funds, only keep equity indexes
@@ -168,14 +169,35 @@ def _is_equity_index(name: str) -> bool:
     return any(k in name for k in equity_keywords)
 
 
-def _is_duplicate_share(name: str) -> bool:
-    """Check if a fund is a duplicate share class (C/E/D/B vs A)."""
-    # C/E/D/B shares are duplicates of the base/A fund
-    if name.endswith("C") or name.endswith("类C"):
-        return True
-    if name.endswith("D") or name.endswith("E") or name.endswith("B"):
-        return True
-    return False
+def _is_duplicate_share(name: str, all_names: set[str] | None = None) -> bool:
+    """Check if a fund is a duplicate share class (C/E/D/B vs A).
+
+    Only returns True when an A-class or base equivalent exists in all_names.
+    If all_names is None, falls back to simple suffix check (legacy behavior).
+    """
+    if name.endswith("类C"):
+        base = name[:-2]
+        a_equiv = base + "类A"
+    elif name.endswith("C"):
+        base = name[:-1]
+        a_equiv = base + "A"
+    elif name.endswith("D"):
+        base = name[:-1]
+        a_equiv = base + "A"
+    elif name.endswith("E"):
+        base = name[:-1]
+        a_equiv = base + "A"
+    elif name.endswith("B"):
+        base = name[:-1]
+        a_equiv = base + "A"
+    else:
+        return False
+
+    if all_names is not None:
+        # Only skip if an A-class or base equivalent exists
+        return base in all_names or a_equiv in all_names
+
+    return True  # legacy: always skip C/D/E/B
 
 
 # Built-in money market fund recommendations (no screening needed)
