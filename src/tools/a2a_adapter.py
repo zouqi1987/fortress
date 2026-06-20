@@ -36,11 +36,11 @@ AGENT_CARD: dict = {
     "skills": [
         {
             "name": "assess_risk",
-            "description": "5 因子风险测评",
+            "description": "6 因子风险测评 (A-E 统一问卷)",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "horizon": {"type": "string", "description": "short/medium/long"},
+                    "horizon": {"type": "string", "description": "A(1年内)|B(1-2年)|C(2-3年)|D(3-5年)|E(5年以上)"},
                     "max_loss_pct": {"type": "number"},
                     "income": {"type": "integer", "minimum": 1, "maximum": 5},
                     "experience": {"type": "integer", "minimum": 1, "maximum": 5},

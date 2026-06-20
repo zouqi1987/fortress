@@ -1,4 +1,4 @@
-"""Tests for src/engine/risk_profile.py — 5-factor risk assessment."""
+"""Tests for src/engine/risk_profile.py — 6-factor risk assessment with 5-level horizon."""
 from decimal import Decimal
 
 import pytest
@@ -15,7 +15,7 @@ from src.engine.risk_profile import (
 class TestRiskProfile:
     def test_all_min_scores_yields_conservative(self):
         profile = assess_risk_profile(
-            horizon=InvestmentHorizon.SHORT,
+            horizon=InvestmentHorizon.VERY_SHORT,
             max_loss_pct=Decimal("5"),
             income_stability=1,
             experience=1,
@@ -26,7 +26,7 @@ class TestRiskProfile:
 
     def test_all_max_scores_yields_aggressive(self):
         profile = assess_risk_profile(
-            horizon=InvestmentHorizon.LONG,
+            horizon=InvestmentHorizon.VERY_LONG,
             max_loss_pct=Decimal("30"),
             income_stability=5,
             experience=5,
@@ -62,7 +62,7 @@ class TestRiskProfile:
 
     def test_default_recommendation_includes_allocation_hint(self):
         profile = assess_risk_profile(
-            horizon=InvestmentHorizon.LONG,
+            horizon=InvestmentHorizon.VERY_LONG,
             max_loss_pct=Decimal("20"),
             income_stability=4,
             experience=3,
@@ -76,13 +76,43 @@ class TestRiskProfile:
     @pytest.mark.parametrize(
         "horizon,loss,income,exp,liq,expected",
         [
-            (InvestmentHorizon.SHORT, Decimal("5"), 1, 1, 1, RiskLevel.CONSERVATIVE),
-            (InvestmentHorizon.LONG, Decimal("30"), 5, 5, 5, RiskLevel.AGGRESSIVE),
+            (InvestmentHorizon.VERY_SHORT, Decimal("5"), 1, 1, 1, RiskLevel.CONSERVATIVE),
+            (InvestmentHorizon.VERY_LONG, Decimal("30"), 5, 5, 5, RiskLevel.AGGRESSIVE),
             (InvestmentHorizon.LONG, Decimal("10"), 3, 4, 3, RiskLevel.MODERATE),
             (InvestmentHorizon.SHORT, Decimal("25"), 2, 5, 1, RiskLevel.MODERATE),
-            (InvestmentHorizon.SHORT, Decimal("5"), 1, 1, 5, RiskLevel.CONSERVATIVE),
+            (InvestmentHorizon.VERY_SHORT, Decimal("5"), 1, 1, 5, RiskLevel.CONSERVATIVE),
         ],
     )
     def test_edge_cases(self, horizon, loss, income, exp, liq, expected):
         profile = assess_risk_profile(horizon, loss, income, exp, liq)
         assert profile.level == expected
+
+    # ── 5-level horizon scoring tests ────────────────────────────────
+
+    @pytest.mark.parametrize(
+        "horizon,expected_score",
+        [
+            (InvestmentHorizon.VERY_SHORT, 2),
+            (InvestmentHorizon.SHORT, 6),
+            (InvestmentHorizon.MEDIUM, 10),
+            (InvestmentHorizon.LONG, 14),
+            (InvestmentHorizon.VERY_LONG, 18),
+        ],
+    )
+    def test_horizon_scoring_5_levels(self, horizon, expected_score):
+        """Each horizon level maps to correct score."""
+        profile = assess_risk_profile(
+            horizon=horizon,
+            max_loss_pct=Decimal("10"),
+            income_stability=3,
+            experience=3,
+            liquidity_need=3,
+        )
+        assert profile.scores.horizon == expected_score
+
+    def test_five_horizon_values_exist(self):
+        """InvestmentHorizon has exactly 5 values."""
+        values = list(InvestmentHorizon)
+        assert len(values) == 5
+        names = {v.name for v in values}
+        assert names == {"VERY_SHORT", "SHORT", "MEDIUM", "LONG", "VERY_LONG"}

@@ -5,19 +5,25 @@ from src.engine.risk_profile import InvestmentHorizon, assess_risk_profile
 
 
 def assess_risk(horizon: str, max_loss_pct: float, income: int, experience: int, liquidity: int) -> dict:
-    """Run 5-factor risk assessment and return profile.
+    """Run 6-factor risk assessment and return profile.
 
     Args:
-        horizon: "short" | "medium" | "long"
+        horizon: questionnaire answer — "A"|"B"|"C"|"D"|"E" (or legacy "short"|"medium"|"long")
         max_loss_pct: max acceptable loss (e.g. 15.0 = 15%)
         income: income stability 1-5
         experience: investment experience 1-5
         liquidity: liquidity need 1-5
     """
-    horizon_map = {"short": InvestmentHorizon.SHORT, "medium": InvestmentHorizon.MEDIUM, "long": InvestmentHorizon.LONG}
+    horizon_map = {
+        "A": InvestmentHorizon.VERY_SHORT, "very_short": InvestmentHorizon.VERY_SHORT,
+        "B": InvestmentHorizon.SHORT, "short": InvestmentHorizon.SHORT,
+        "C": InvestmentHorizon.MEDIUM, "medium": InvestmentHorizon.MEDIUM,
+        "D": InvestmentHorizon.LONG, "long": InvestmentHorizon.LONG,
+        "E": InvestmentHorizon.VERY_LONG, "very_long": InvestmentHorizon.VERY_LONG,
+    }
     h = horizon_map.get(horizon)
     if h is None:
-        return {"error": f"Invalid horizon: {horizon!r}. Use 'short', 'medium', or 'long'."}
+        return {"error": f"Invalid horizon: {horizon!r}. Use 'A'|'B'|'C'|'D'|'E' (or 'short'|'medium'|'long'|'very_long')."}
 
     profile = assess_risk_profile(
         horizon=h,

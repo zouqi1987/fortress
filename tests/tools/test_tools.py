@@ -13,7 +13,7 @@ from src.tools.scenario import run_scenario
 
 class TestAssessRisk:
     def test_returns_profile_dict(self):
-        result = assess_risk("medium", 15.0, 3, 3, 3)
+        result = assess_risk("C", 15.0, 3, 3, 3)  # C = medium
         assert result["level"] == "moderate"
         assert "total_score" in result
         assert "equity_pct" in result
@@ -22,6 +22,28 @@ class TestAssessRisk:
     def test_invalid_horizon_returns_error(self):
         result = assess_risk("century", 10.0, 3, 3, 3)
         assert "error" in result
+
+    @pytest.mark.parametrize(
+        "letter,expected_name",
+        [
+            ("A", "very_short"),
+            ("B", "short"),
+            ("C", "medium"),
+            ("D", "long"),
+            ("E", "very_long"),
+        ],
+    )
+    def test_a_to_e_horizon_mapping(self, letter, expected_name):
+        """A-E questionnaire answers map to correct horizon values."""
+        result = assess_risk(letter, 10.0, 3, 3, 3)
+        assert "error" not in result
+        assert result["level"] in ("conservative", "moderate", "aggressive")
+
+    def test_legacy_horizon_strings_still_work(self):
+        """Backward compatibility: old 'short'/'medium'/'long' still accepted."""
+        for h in ("short", "medium", "long"):
+            result = assess_risk(h, 15.0, 3, 3, 3)
+            assert "error" not in result, f"horizon={h!r} should work"
 
 
 class TestGetAllocation:
