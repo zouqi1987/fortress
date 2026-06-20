@@ -142,7 +142,6 @@ src/
 │   ├── state.py                 # ConversationState TypedDict
 │   ├── graph.py                 # LangGraph DAG（路径 A/B/C 路由）
 │   ├── signals.py               # 结构化信号提取（纯计算，零 LLM）
-│   ├── llm.py                   # 可选独立 LLM 适配器（FORTRESS_LLM=deepseek）
 │   └── nodes/
 │       ├── data_collector.py    # 数据采集节点
 │       ├── debater.py           # 多空信号提取节点

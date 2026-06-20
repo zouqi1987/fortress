@@ -102,7 +102,7 @@ fortress/
 │   │   ├── market.py, cache.py, portfolio_db.py
 │   │   └── sources/ (akshare.py, tiantian.py, eastmoney.py)
 │   ├── agent/                    # LangGraph DAG
-│   │   ├── state.py, graph.py, signals.py, llm.py
+│   │   ├── state.py, graph.py, signals.py
 │   │   └── nodes/ (data_collector, debater, allocator, risk_assessor, reporter)
 │   ├── redlines/                 # 红线规则 DSL
 │   │   ├── hard_rules.py, personal_rules.py

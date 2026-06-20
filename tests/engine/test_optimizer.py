@@ -46,9 +46,9 @@ class TestOptimizer:
             assert total == pytest.approx(1.0, abs=0.02)
 
     @pytest.mark.integration
-    @pytest.mark.xfail(reason="riskfolio-lib v7.3 numpy/scipy compat issue — known, harmless")
+    @pytest.mark.xfail(reason="riskfolio-lib v7.3 incompatible with current numpy/scipy — optimizer falls back to equal weight")
     def test_riskfolio_lib_integration(self):
-        """Smoke test that riskfolio-lib is importable and functional."""
+        """Verify riskfolio-lib importable. Core optimization fails due to dependency incompatibility; equal-weight fallback is used."""
         import pandas as pd
         import riskfolio as rp
 

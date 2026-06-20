@@ -154,9 +154,7 @@ RULE_FUND_MIN_SIZE = RedLine(
 **debater 节点**: 输出结构化 DebateSignals（bull_signals + bear_signals + conclusion_framework），
 而非 LLM 生成的文本。信号来源于纯计算——PE 分位、波动率评估、分散度检查。
 
-**独立模式**: `src/agent/llm.py` 保留为可选适配器。
-设置 `FORTRESS_LLM=deepseek` + `DEEPSEEK_API_KEY` 可脱离宿主独立运行。
-默认模式无需任何外部 API key。
+Fortress 永远作为 Skill 运行，不包含独立 LLM 适配器。宿主 LLM 负责全部自然语言生成。
 
 ---
 
