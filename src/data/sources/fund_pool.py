@@ -85,6 +85,14 @@ def fetch_fund_pool(
             if allowed_types and fund_type not in allowed_types:
                 continue
 
+            # Skip C/E/D/B share classes (duplicates of A/base fund)
+            if _is_duplicate_share(name):
+                continue
+
+            # For index funds, only keep equity indexes
+            if fund_type == "index" and not _is_equity_index(name):
+                continue
+
             funds.append(PoolFund(
                 code=code,
                 name=name,
@@ -103,6 +111,18 @@ def fetch_fund_pool(
             ))
         except (ValueError, KeyError):
             continue
+
+    # Add money market funds (built-in list, not scored against growth funds)
+    if allowed_types is None or "money" in allowed_types:
+        for m in MONEY_FUNDS:
+            funds.append(PoolFund(
+                code=m["code"], name=m["name"], fund_type="money",
+                manager="—", fee=Decimal("0.0025"),
+                ret_1m=0.2, ret_3m=0.5, ret_6m=1.0,
+                ret_1y=m["ret_1y"], ret_3y=2.5,
+                rating_morningstar=5, rating_shanghai=5,
+                rating_zhaoshang=5, rating_jiAn=5,
+            ))
 
     return funds
 
@@ -124,8 +144,45 @@ def _classify_type(raw: str) -> str:
         return "bond"
     if "混合" in raw:
         return "mixed"
+    if "指数型-股票" in raw or "指数型-国际" in raw:
+        return "index"  # equity index
+    if "指数" in raw or "ETF" in raw:
+        # Bond index → classify as bond
+        if "债" in raw:
+            return "bond"
+        return "index"
     if "股票" in raw:
         return "stock"
-    if "指数" in raw or "ETF" in raw:
-        return "index"
     return "mixed"
+
+
+def _is_equity_index(name: str) -> bool:
+    """Check if an index fund tracks equity (沪深300, 中证500 etc)."""
+    name = name.lower()
+    bond_keywords = ["债", "国债", "信用债", "利率债", "政金债", "金融债", "可转债"]
+    if any(k in name for k in bond_keywords):
+        return False
+    equity_keywords = ["沪深300", "中证500", "中证1000", "创业板", "科创板",
+                       "上证50", "深证", "恒生", "标普", "纳斯达克", "300",
+                       "500", "红利", "行业", "医药", "消费", "科技", "新能源"]
+    return any(k in name for k in equity_keywords)
+
+
+def _is_duplicate_share(name: str) -> bool:
+    """Check if a fund is a duplicate share class (C/E/D/B vs A)."""
+    # C/E/D/B shares are duplicates of the base/A fund
+    if name.endswith("C") or name.endswith("类C"):
+        return True
+    if name.endswith("D") or name.endswith("E") or name.endswith("B"):
+        return True
+    return False
+
+
+# Built-in money market fund recommendations (no screening needed)
+MONEY_FUNDS: list[dict] = [
+    {"code": "000638", "name": "富国富钱包货币", "ret_1y": 2.2},
+    {"code": "000343", "name": "华夏财富宝货币A", "ret_1y": 2.1},
+    {"code": "000330", "name": "汇添富现金宝货币", "ret_1y": 2.0},
+    {"code": "000359", "name": "易方达易理财货币A", "ret_1y": 2.0},
+    {"code": "000389", "name": "广发天天红货币A", "ret_1y": 2.0},
+]
