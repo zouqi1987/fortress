@@ -267,6 +267,64 @@ def score_manager(manager) -> int:
 # ── Bulk Screening (uses pre-computed returns from fund pool) ──────
 
 
+def personalized_score(fund, profile=None) -> int:
+    """Score a fund with personalization from risk profile.
+
+    Without profile: same as score_bulk().
+    With profile: adjusts weights based on risk level, loss tolerance, experience.
+
+    Adjustments from questionnaire:
+      - max_loss_pct → penalize volatile funds for low-risk users
+      - experience → favor simpler products for novices
+      - product_bias → reweight risk vs return
+      - expected_return → verify fund can deliver
+    """
+    score = score_bulk(fund)
+
+    if profile is None:
+        return score
+
+    # ── Volatility penalty: low max_loss → avoid high-return/high-risk funds ─
+    if hasattr(profile, 'scores') and profile.scores.loss_tolerance < 10:
+        # User can't handle losses → penalize funds with extreme returns
+        if fund.ret_1y > 40:
+            score -= 10  # +40% funds are usually volatile
+        elif fund.ret_1y > 25:
+            score -= 5
+
+    # ── Experience: novice → prefer straightforward products ──────────
+    if hasattr(profile, 'scores') and profile.scores.experience < 10:
+        # Penalize complex products
+        if "可转债" in fund.name or "转债" in fund.name:
+            score -= 5  # convertible bonds are complex
+        if fund.fund_type == "index" and fund.ret_1y > 50:
+            score -= 3  # thematic index funds can be confusing
+
+    # ── Product bias ──────────────────────────────────────────────────
+    bias = getattr(profile, 'product_weight_bias', 'balanced')
+    if bias == "safety":
+        # Penalize funds with high returns (likely volatile)
+        if fund.ret_1y > 30:
+            score -= 8
+        # Reward funds with stability
+        if fund.ret_1y > 0 and fund.ret_3y > 0 and fund.ret_1y < 15:
+            score += 5  # consistent moderate performer
+    elif bias == "growth":
+        # Reward high performers
+        if fund.ret_1y > 20:
+            score += 5
+
+    # ── Expected return check ─────────────────────────────────────────
+    exp_ret = getattr(profile, 'expected_return_pct', None)
+    if exp_ret is not None:
+        exp = float(exp_ret)
+        # If user wants 5-8% and fund can't deliver, penalize
+        if exp > fund.ret_1y + 5 and fund.ret_1y < 3:
+            score -= 5  # fund can't meet user's target
+
+    return max(0, min(100, score))
+
+
 def score_bulk(fund) -> int:
     """Score a PoolFund using pre-computed returns (0–100).
 
