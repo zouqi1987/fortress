@@ -89,3 +89,20 @@ class TestIsDuplicateShare:
         # Actually "ABC" → base="AB", a_equiv="ABA" → neither in all_names → False
         # This is correct: "ABC" isn't a C-share of "AB"
         assert _is_duplicate_share("ABC", all_names) is False
+
+
+class TestNoHardcodedMoneyFunds:
+    """Hardcoded money fund data violates 'API-first' principle."""
+
+    def test_money_funds_constant_does_not_exist(self):
+        """MONEY_FUNDS should not be importable — no hardcoded fund data."""
+        with pytest.raises(ImportError):
+            from src.data.sources.fund_pool import MONEY_FUNDS
+
+    def test_fetch_fund_pool_has_no_money_attribute(self):
+        """Module should not have MONEY_FUNDS attribute."""
+        import src.data.sources.fund_pool as fpm
+        assert not hasattr(fpm, "MONEY_FUNDS"), (
+            "MONEY_FUNDS hardcoded list must be removed. "
+            "Money fund data should come from real API if available."
+        )

@@ -113,18 +113,6 @@ def fetch_fund_pool(
         except (ValueError, KeyError):
             continue
 
-    # Add money market funds (built-in list, not scored against growth funds)
-    if allowed_types is None or "money" in allowed_types:
-        for m in MONEY_FUNDS:
-            funds.append(PoolFund(
-                code=m["code"], name=m["name"], fund_type="money",
-                manager="—", fee=Decimal("0.0025"),
-                ret_1m=0.2, ret_3m=0.5, ret_6m=1.0,
-                ret_1y=m["ret_1y"], ret_3y=2.5,
-                rating_morningstar=5, rating_shanghai=5,
-                rating_zhaoshang=5, rating_jiAn=5,
-            ))
-
     return funds
 
 
@@ -200,11 +188,3 @@ def _is_duplicate_share(name: str, all_names: set[str] | None = None) -> bool:
     return True  # legacy: always skip C/D/E/B
 
 
-# Built-in money market fund recommendations (no screening needed)
-MONEY_FUNDS: list[dict] = [
-    {"code": "000638", "name": "富国富钱包货币", "ret_1y": 2.2},
-    {"code": "000343", "name": "华夏财富宝货币A", "ret_1y": 2.1},
-    {"code": "000330", "name": "汇添富现金宝货币", "ret_1y": 2.0},
-    {"code": "000359", "name": "易方达易理财货币A", "ret_1y": 2.0},
-    {"code": "000389", "name": "广发天天红货币A", "ret_1y": 2.0},
-]
