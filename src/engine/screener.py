@@ -263,3 +263,58 @@ def score_manager(manager) -> int:
 
     return min(5, score)
 
+
+# ── Bulk Screening (uses pre-computed returns from fund pool) ──────
+
+
+def score_bulk(fund) -> int:
+    """Score a PoolFund using pre-computed returns (0–100).
+
+    Dimensions: static(40) + returns(25) + rating(20) + consistency(10) + manager(5).
+    Uses pre-computed multi-period returns — no NAV fetch needed.
+    """
+    score = 0
+
+    # ── Returns (0–25): weighted multi-period ────────────────────────
+    # 1m:2 3m:3 6m:5 1y:10 3y:5
+    periods = [("ret_1m", 2), ("ret_3m", 3), ("ret_6m", 5), ("ret_1y", 10), ("ret_3y", 5)]
+    for attr, pts in periods:
+        ret = getattr(fund, attr, 0.0) or 0.0
+        if ret > 5:
+            score += pts
+        elif ret > 0:
+            score += pts // 2
+
+    # ── Risk/Rating proxy (0–20): average of 4 agency ratings ────────
+    ratings = [fund.rating_morningstar, fund.rating_shanghai, fund.rating_zhaoshang, fund.rating_jiAn]
+    valid_ratings = [r for r in ratings if r and r > 0]
+    if valid_ratings:
+        avg_rating = sum(valid_ratings) / len(valid_ratings)
+        score += min(20, int(avg_rating * 4))  # rating 5 → 20pts
+    elif fund.ret_1y > 0:
+        score += 10  # unrated but positive return
+
+    # ── Stability proxy (0–10): return trend consistency ─────────────
+    trends = [fund.ret_1m, fund.ret_3m, fund.ret_6m, fund.ret_1y]
+    positive_trends = sum(1 for t in trends if t and t > 0)
+    score += min(10, positive_trends * 2)
+
+    # ── Fee penalty ──────────────────────────────────────────────────
+    fee = float(fund.fee)
+    if fee <= 0.005:
+        score += 15
+    elif fee <= 0.010:
+        score += 10
+    elif fee <= 0.015:
+        score += 5
+
+    # ── Type bonus ───────────────────────────────────────────────────
+    type_bonus = {"bond": 10, "mixed": 8, "index": 6, "stock": 4, "money": 2}
+    score += type_bonus.get(fund.fund_type, 5)
+
+    # ── Manager name = known → bonus ────────────────────────────────
+    if fund.manager and fund.manager != "未知" and fund.manager != "":
+        score += 5
+
+    return min(100, score)
+
