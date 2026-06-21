@@ -1,0 +1,13 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "fortress-marketplace",
+  "description": "Fortress — 对话式 AI 投资顾问。3 个命名 Agent + 15 个 MCP 工具，覆盖个人基金投资全场景（底仓配置 / 机会捕捉 / 持仓诊断）。",
+  "owner": {"name": "Fortress"},
+  "plugins": [
+    {
+      "name": "fortress",
+      "source": ".",
+      "description": "AI 投资顾问 — 底仓配置(风险测评→资产配置→压力测试)、机会捕捉(市场研判→基金筛选→多空信号)、持仓诊断(健康评分→红线审计)"
+    }
+  ]
+}
