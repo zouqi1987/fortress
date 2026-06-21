@@ -5,11 +5,11 @@
       "args": ["-y", "ocrtool-mcp"]
     },
     "fortress": {
-      "command": "/Volumes/X9 Pro/Projects/fortress/.venv/bin/python",
+      "command": "${FORTRESS_PYTHON:-python3}",
       "args": ["-m", "src.tools.server"],
-      "cwd": "/Volumes/X9 Pro/Projects/fortress",
+      "cwd": ".",
       "env": {
-        "FORTRESS_DATA_DIR": "/Volumes/X9 Pro/Projects/fortress/data"
+        "FORTRESS_DATA_DIR": "data"
       }
     }
   }
