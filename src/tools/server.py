@@ -1,4 +1,4 @@
-"""Fortress MCP Server — 15 tools across 3 named Agents + 12 supporting tools.
+"""Fortress MCP Server — 16 tools across 3 named Agents + 13 supporting tools.
 
 Usage:
     python -m src.tools.server          # stdio transport (MCP clients)
@@ -9,10 +9,11 @@ Three Named Agents (one-click entry points):
     机会捕捉(求收益):   hunt_opportunity    → 市场周期研判 → 基金筛选 → 多空信号
     持仓诊断(求安心):   diagnose_holdings   → 健康评分 → 红线审计 → 压力测试
 
-Twelve Supporting Tools:
+Thirteen Supporting Tools:
     assess_risk, get_allocation, get_advice (legacy), screen_funds,
     audit_single_fund, run_scenario, lookup_fund, lookup_index,
-    check_health, detect_regime, list_hard_rules, manage_personal_rules
+    check_health, detect_regime, list_hard_rules, manage_personal_rules,
+    export_report
 """
 from mcp.server.fastmcp import FastMCP
 
@@ -21,6 +22,7 @@ from src.tools.advisory import diagnose_holdings as _diagnose_holdings
 from src.tools.advisory import get_advice as _get_advice
 from src.tools.advisory import hunt_opportunity as _hunt_opportunity
 from src.tools.audit import audit_single_fund as _audit_single_fund
+from src.tools.export import export_report as _export_report
 from src.tools.health import check_health as _check_health
 from src.tools.macro import detect_regime as _detect_regime
 from src.tools.market import lookup_fund as _lookup_fund
@@ -519,6 +521,33 @@ def screen_funds(
     - results 按 score 降序排列
     """
     return _screen_funds(funds, min_net_asset_value, allowed_types, max_fee_rate, nav_data)
+
+
+# ── Tool 16: Report Export ───────────────────────────────────────────
+
+@server.tool()
+def export_report(
+    report_html: str,
+    output_path: str,
+    title: str = "投资分析报告",
+) -> dict:
+    """【全路径通用】将 HTML 报告保存为自包含 .html 文件（浏览器打开后 Ctrl+P 打印为 PDF）。
+
+    使用场景:
+    - "把这份报告保存下来发给我客户"
+    - "导出为 PDF 文件"
+
+    HOW TO USE:
+    - report_html: get_advice / Agent 工具返回的 HTML 报告内容
+    - output_path: 保存路径（如 "/home/user/报告.html" 或 "report.html"）
+    - title: 页面标题，默认 "投资分析报告"
+
+    RETURNS: {file_path, size_bytes, message}
+    - file_path: 文件的绝对路径
+    - size_bytes: 文件大小（字节）
+    - message: 用户可读的保存确认消息
+    """
+    return _export_report(report_html, output_path, title)
 
 
 # ── Entry Point ──────────────────────────────────────────────────────
