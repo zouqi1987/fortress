@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}投资分析报告{% endblock %}</title>
+<style>
+  /* ── Reset & Base ──────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+    max-width: 900px; margin: 0 auto; padding: 0;
+    color: #2c3e50; line-height: 1.8; font-size: 14px;
+  }
+
+  /* ── Cover ────────────────────────────────────── */
+  .cover {
+    text-align: center; padding: 4em 2em 3em 2em;
+    border-bottom: 4px solid #1a5276; margin-bottom: 2em;
+  }
+  .cover h1 { font-size: 2.2em; color: #1a5276; margin: 0.5em 0 0.2em 0; }
+  .cover .subtitle { font-size: 1.1em; color: #7f8c8d; margin: 0.3em 0; }
+  .cover .meta { font-size: 0.9em; color: #95a5a6; margin: 1.5em 0 0 0; }
+
+  /* ── TOC ──────────────────────────────────────── */
+  nav.toc { margin: 1.5em 0 2em 0; padding: 1em 1.5em; background: #f8f9fa; border-radius: 6px; }
+  nav.toc h2 { font-size: 1em; color: #7f8c8d; margin: 0 0 0.5em 0; text-transform: uppercase; letter-spacing: 2px; }
+  nav.toc ol { margin: 0; padding-left: 1.5em; }
+  nav.toc li { margin: 0.3em 0; }
+  nav.toc a { color: #1a5276; text-decoration: none; }
+
+  /* ── Sections ─────────────────────────────────── */
+  section { margin: 2em 0; padding: 0 2em; page-break-inside: avoid; }
+  h2 { color: #1a5276; border-bottom: 2px solid #1a5276; padding-bottom: 6px; font-size: 1.4em; margin: 1.5em 0 0.8em 0; }
+  h3 { color: #34495e; font-size: 1.1em; margin: 1em 0 0.5em 0; }
+
+  /* ── Tables ───────────────────────────────────── */
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { border: 1px solid #dee2e6; padding: 10px 14px; text-align: left; }
+  th { background: #f0f3f7; font-weight: 600; color: #2c3e50; }
+  tr:nth-child(even) { background: #fafbfc; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+  /* ── Badges ───────────────────────────────────── */
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
+  .badge-pass { background: #d4edda; color: #155724; }
+  .badge-warn { background: #fff3cd; color: #856404; }
+  .badge-reject { background: #f8d7da; color: #721c24; }
+  .badge-grade { padding: 4px 16px; border-radius: 16px; font-size: 1.1em; }
+  .badge-grade-A { background: #d4edda; color: #155724; }
+  .badge-grade-B { background: #d1ecf1; color: #0c5460; }
+  .badge-grade-C { background: #fff3cd; color: #856404; }
+  .badge-grade-D, .badge-grade-F { background: #f8d7da; color: #721c24; }
+
+  /* ── Score bar ────────────────────────────────── */
+  .score-bar { height: 8px; background: #e9ecef; border-radius: 4px; margin: 6px 0 12px 0; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .score-bar-fill.good { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+  .score-bar-fill.ok { background: linear-gradient(90deg, #f39c12, #f1c40f); }
+  .score-bar-fill.bad { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+
+  /* ── Stress card ──────────────────────────────── */
+  .stress-card { background: #fef9e7; border-left: 4px solid #f39c12; padding: 1em 1.5em; margin: 1em 0; border-radius: 0 6px 6px 0; }
+  .stress-card h3 { margin-top: 0; color: #e67e22; }
+
+  /* ── Disclaimer ───────────────────────────────── */
+  .disclaimer { margin-top: 3em; padding: 1.5em 2em; background: #f8f9fa; border-radius: 6px; font-size: 0.85em; color: #7f8c8d; text-align: center; }
+
+  /* ── Print ────────────────────────────────────── */
+  @media print {
+    body { font-size: 12px; margin: 0; padding: 0; }
+    section { padding: 0; page-break-inside: avoid; }
+    .cover { page-break-after: always; }
+    nav.toc { page-break-after: always; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: auto; }
+    @page { size: A4; margin: 2cm; }
+  }
+</style>
+</head>
+<body>
+
+{% block cover %}
+<div class="cover">
+  <h1>🏰 投资分析报告</h1>
+  <p class="subtitle">{{ path_name }}</p>
+  <p class="subtitle">Fortress AI 投资顾问</p>
+  <p class="meta">报告日期: {{ date }} &nbsp;|&nbsp; 编号: {{ report_id }}</p>
+</div>
+{% endblock %}
+
+{% block toc %}
+<nav class="toc">
+  <h2>目录</h2>
+  <ol>
+    {% if portfolio %}<li><a href="#holdings">§1. 持仓概览</a></li>{% endif %}
+    {% if risk_profile %}<li><a href="#risk">§2. 风险测评</a></li>{% endif %}
+    {% if debate_result %}<li><a href="#debate">§3. 多空辩论</a></li>{% endif %}
+    {% if allocation_plan %}<li><a href="#allocation">§4. 配置方案</a></li>{% endif %}
+    {% if audit_results %}<li><a href="#audit">§5. 单品审计</a></li>{% endif %}
+    {% if stress_result %}<li><a href="#stress">§6. 压力测试</a></li>{% endif %}
+    {% if health_check %}<li><a href="#health">§7. 健康评分</a></li>{% endif %}
+    {% if errors %}<li><a href="#warnings">§8. 注意事项</a></li>{% endif %}
+  </ol>
+</nav>
+{% endblock %}
+
+{% block content %}{% endblock %}
+
+{% block disclaimer %}
+<div class="disclaimer">
+  <p><strong>免责声明</strong></p>
+  <p>本报告由 Fortress AI 投资顾问生成，仅供研究参考，不构成投资建议。</p>
+  <p>投资有风险，入市需谨慎。过往业绩不代表未来表现。</p>
+  <p>报告编号: {{ report_id }}</p>
+</div>
+{% endblock %}
+
+</body>
+</html>

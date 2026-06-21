@@ -119,10 +119,28 @@ class TestReporterNode:
         result = reporter_node(state)
         report = result.get("report_html", "")
         assert isinstance(report, str) and len(report) > 0
-        assert "<html>" in report.lower() or "<div" in report.lower() or "<table" in report.lower()
+        # Template structure assertions
+        assert "<!DOCTYPE html>" in report
+        assert '<html lang="zh-CN">' in report
+        assert "Fortress AI 投资顾问" in report
+        # Section headings
+        assert "§1. 持仓概览" not in report  # no portfolio data in state
+        assert "§2. 风险测评" in report
+        assert "§4. 配置方案" in report
+        assert "§5. 单品审计" in report
+        assert "§6. 压力测试" in report
+        assert "§7. 组合健康度" in report
+        # CSS classes
+        assert "score-bar" in report
+        assert "badge-pass" in report
+        assert "badge-grade-A" in report
+        # Disclaimer
+        assert "免责声明" in report
 
     def test_minimal_state_produces_report(self):
         state = create_initial_state("A", "minimal report")
         result = reporter_node(state)
         report = result.get("report_html", "")
         assert len(report) > 0
+        assert "<!DOCTYPE html>" in report
+        assert "免责声明" in report
