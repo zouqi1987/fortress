@@ -22,9 +22,12 @@ Two integration paths for fortress:
 Status: MCP path PRODUCTION-READY. A2A path EXPERIMENTAL (SDK v1.1.0, API evolving).
 """
 import json
+import logging
 import os
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ── Agent Card (A2A discovery document) ──────────────────────────────
 
@@ -264,9 +267,9 @@ def main():
         from a2a.types import TaskState, TextPart
         import uvicorn
     except ImportError as e:
-        print(f"A2A SDK not fully available: {e}")
-        print("Install: pip install a2a-sdk[http-server] uvicorn")
-        print("For production use, connect via MCP: python -m src.tools.server")
+        logger.info("A2A SDK not fully available: %s", e)
+        logger.info("Install: pip install a2a-sdk[http-server] uvicorn")
+        logger.info("For production use, connect via MCP: python -m src.tools.server")
         sys.exit(1)
 
     class FortressExecutor(AgentExecutor):
@@ -301,8 +304,8 @@ def main():
     )
     app = A2AStarletteApplication(agent_card=card, http_handler=handler)
     port = int(os.environ.get("FORTRESS_A2A_PORT", "8080"))
-    print(f"Fortress A2A server starting on port {port}")
-    print(f"Agent Card: http://localhost:{port}/.well-known/agent.json")
+    logger.info("Fortress A2A server starting on port %d", port)
+    logger.info("Agent Card: http://localhost:%d/.well-known/agent.json", port)
     uvicorn.run(app.build(), host="0.0.0.0", port=port)
 
 

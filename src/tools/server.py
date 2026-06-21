@@ -34,6 +34,11 @@ from src.tools.risk import assess_risk as _assess_risk
 from src.tools.rules import list_hard_rules as _list_hard_rules
 from src.tools.scenario import run_scenario as _run_scenario
 
+from src.logging_config import setup as setup_logging
+
+# Configure structured logging — all output to stderr
+setup_logging()
+
 server = FastMCP("fortress")
 
 
