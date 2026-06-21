@@ -3,10 +3,10 @@
 [![Test](https://github.com/zouqi1987/fortress/actions/workflows/test.yml/badge.svg)](https://github.com/zouqi1987/fortress/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/zouqi1987/fortress/blob/main/LICENSE)
 
-对话式 AI 投资顾问 **Claude Code Skill**。三条路径：
-- **路径 A — 底仓配置**（求确定性）：风险测评 → 三层架构 → 产品筛选 → 压力测试
-- **路径 B — 机会捕捉**（求收益）：市场异动 → 多空信号 → 调仓建议
-- **路径 C — 持仓诊断**（求安心）：拉取持仓 → 层级偏离 → 单品审计 → 健康评分
+对话式 AI 投资顾问 **Claude Code Skill**。3 个命名 Agent + 15 个 MCP 工具：
+- **底仓配置**（求确定性）：风险测评 → 三层架构 → 产品筛选 → 压���测试
+- **机会捕捉**（求收益）：市场异动 → 多空信号 → 调仓建议
+- **持仓诊断**（求安心）：拉取持仓 → 层级偏离 → 单品审计 → 健康评分
 
 > **架构理念**: 堡垒是**领域计算引擎**。宿主 LLM（Claude Code）负责自然语言叙事，堡垒负责量化信号计算。不需要独立的 API key。
 
@@ -17,7 +17,11 @@
 ### 1. 安装
 
 ```bash
-git clone <repo-url> fortress
+# 方式 A: Claude Plugin（推荐）
+claude plugin add /path/to/fortress
+
+# 方式 B: 手动安装
+git clone https://github.com/zouqi1987/fortress.git
 cd fortress
 python3 -m venv .venv
 source .venv/bin/activate
@@ -26,7 +30,7 @@ pip install -e ".[dev]"
 
 ### 2. Claude Code 自动发现
 
-Claude Code 启动时自动加载项目根目录的 `.mcp.json`，注册 6 个工具。无需额外配置。
+Claude Code 启动时自动加载项目根目录的 `.mcp.json`，注册 15 个 MCP 工具（3 个 Agent + 12 个支持工具）。无需额外配置。
 
 验证工具已注册：
 ```

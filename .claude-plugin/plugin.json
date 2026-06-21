@@ -1,0 +1,8 @@
+{
+  "name": "fortress",
+  "version": "0.1.0",
+  "description": "对话式 AI 投资顾问 — 3 条路径（底仓配置/机会捕捉/持仓诊断）覆盖个人基金投资全场景。量化计算引擎 + MCP 协议，支持 Claude Code 和 Hermes Agent 双平台。",
+  "author": {
+    "name": "Fortress"
+  }
+}

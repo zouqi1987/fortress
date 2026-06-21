@@ -1,6 +1,18 @@
 # Fortress — AI 投资顾问 Agent Skill
 
-对话式 AI 投资顾问。三条路径：底仓配置（求确定性）+ 机会捕捉（求收益）+ 持仓诊断（求安心）。
+对话式 AI 投资顾问。3 个命名 Agent + 15 个 MCP 工具，覆盖个人基金投资全场景。
+
+## 安装
+
+```bash
+# Claude Code — 本地添加
+claude plugin add /path/to/fortress
+
+# Claude Code — 从 Marketplace 安装（已发布后）
+claude plugin install fortress
+
+# Hermes Agent — 在 ~/.hermes/config.yaml 中添加 local skill
+```
 
 ## 架构理念
 
@@ -12,10 +24,18 @@
 
 ## 支持平台
 
-- **Claude Code**: MCP 协议，12 个工具，自动发现 `.mcp.json`（生产就绪）
-- **Hermes Agent**: A2A 协议，12 个 skills，Agent Card 自动发现（实验性）
+- **Claude Code**: MCP 协议 + Claude Plugin，自动发现 `.mcp.json`（生产就绪）
+- **Hermes Agent**: A2A 协议，Agent Card 自动发现（实验性）
 
-## MCP 工具（12个）
+## 3 个命名 Agent（一键入口）
+
+| Agent | 路径 | 描述 | 使用场景 |
+|-------|------|------|----------|
+| `底仓配置` | A | 风险测评 → 资产配置 → 压力测试 | "帮我做个配置"、"评估风险" |
+| `机会捕捉` | B | 市场研判 → 基金筛选 → 多空信号 | "有没有机会"、"该加仓吗" |
+| `持仓诊断` | C | 健康评分 → 红线审计 → 压力测试 | "帮我看看持仓"、"体检一下" |
+
+## MCP 工具（15个：3 Agent + 12 支持）
 
 ### 路径 A 核心链 — 底仓配置
 
