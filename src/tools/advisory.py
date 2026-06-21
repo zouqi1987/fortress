@@ -40,3 +40,24 @@ def get_advice(path: str, message: str, portfolio: dict | None = None) -> dict:
         "path": result.get("path"),
         "errors": result.get("errors", []),
     }
+
+
+# ── Named Agent wrappers (thin wrappers, zero new logic) ──────────────
+
+
+def allocate_portfolio(message: str, equity: float = 0, bond: float = 0, cash: float = 0) -> dict:
+    """Path A (底仓配置): risk profile → allocation → stress test → HTML report."""
+    portfolio = {"equity": equity, "bond": bond, "cash": cash} if equity or bond or cash else None
+    return get_advice("A", message, portfolio)
+
+
+def hunt_opportunity(message: str, equity: float = 0, bond: float = 0, cash: float = 0) -> dict:
+    """Path B (机会捕捉): regime → debate → screening → allocation → HTML report."""
+    portfolio = {"equity": equity, "bond": bond, "cash": cash} if equity or bond or cash else None
+    return get_advice("B", message, portfolio)
+
+
+def diagnose_holdings(message: str, equity: float = 0, bond: float = 0, cash: float = 0) -> dict:
+    """Path C (持仓诊断): health check → audit → stress test → HTML report."""
+    portfolio = {"equity": equity, "bond": bond, "cash": cash} if equity or bond or cash else None
+    return get_advice("C", message, portfolio)

@@ -1,18 +1,25 @@
-"""Fortress MCP Server — 12 self-documenting tools for AI investment advisory.
+"""Fortress MCP Server — 15 tools across 3 named Agents + 12 supporting tools.
 
 Usage:
     python -m src.tools.server          # stdio transport (MCP clients)
     python src/tools/server.py --sse    # SSE transport (HTTP clients)
 
-Three User Paths (with all relevant tools):
-    A 底仓配置(求确定性): assess_risk → get_allocation → screen_funds → get_advice → run_scenario
-    B 机会捕捉(求收益):   lookup_index → detect_regime → lookup_fund → screen_funds → get_advice(path=B) → audit_single_fund
-    C 持仓诊断(求安心):   get_advice(path=C) → check_health → audit_single_fund → run_scenario
-    * 通用工具: list_hard_rules, manage_personal_rules (任意路径可用)
+Three Named Agents (one-click entry points):
+    底仓配置(求确定性): allocate_portfolio  → 风险测评 → 资产配置 → 压力测试
+    机会捕捉(求收益):   hunt_opportunity    → 市场周期研判 → 基金筛选 → 多空信号
+    持仓诊断(求安心):   diagnose_holdings   → 健康评分 → 红线审计 → 压力测试
+
+Twelve Supporting Tools:
+    assess_risk, get_allocation, get_advice (legacy), screen_funds,
+    audit_single_fund, run_scenario, lookup_fund, lookup_index,
+    check_health, detect_regime, list_hard_rules, manage_personal_rules
 """
 from mcp.server.fastmcp import FastMCP
 
+from src.tools.advisory import allocate_portfolio as _allocate_portfolio
+from src.tools.advisory import diagnose_holdings as _diagnose_holdings
 from src.tools.advisory import get_advice as _get_advice
+from src.tools.advisory import hunt_opportunity as _hunt_opportunity
 from src.tools.audit import audit_single_fund as _audit_single_fund
 from src.tools.health import check_health as _check_health
 from src.tools.macro import detect_regime as _detect_regime
@@ -120,7 +127,91 @@ def get_advice(
     return _get_advice(path, message, portfolio)
 
 
-# ── Tool 4: Fund Audit ───────────────────────────────────────────────
+# ── Agent 1: 底仓配置 (Path A) ─────────────────────────────────────────
+
+@server.tool(name="底仓配置")
+def allocate_portfolio(
+    message: str,
+    equity: float = 0,
+    bond: float = 0,
+    cash: float = 0,
+) -> dict:
+    """【路径A】底仓配置Agent — 完整的首次投资组合建立流程。
+
+    执行流程:
+      数据收集 → 风险测评 → 资产配置 → 压力测试 → HTML报告
+
+    使用场景:
+    - "我想开始理财了，帮我做个配置"
+    - "帮我评估一下风险承受能力"
+    - "首次买基金，应该怎么分配"
+
+    HOW TO USE:
+    - message: 描述你的财务情况、投资目标、风险偏好等（必填）
+    - equity/bond/cash: 当前持仓金额，默认0（可选）
+
+    RETURNS: {report_html, path, errors[]}
+    """
+    return _allocate_portfolio(message, equity, bond, cash)
+
+
+# ── Agent 2: 机会捕捉 (Path B) ─────────────────────────────────────────
+
+@server.tool(name="机会捕捉")
+def hunt_opportunity(
+    message: str,
+    equity: float = 0,
+    bond: float = 0,
+    cash: float = 0,
+) -> dict:
+    """【路径B】机会捕捉Agent — 市场机会识别与调仓建议。
+
+    执行流程:
+      数据收集 → 市场周期研判 → 多空信号提取 → 基金筛选 → 配置建议 → HTML报告
+
+    使用场景:
+    - "大盘跌了很多，现在是不是抄底的机会"
+    - "最近有什么好的投资机会"
+    - "帮我看看现在该加仓还是减仓"
+
+    HOW TO USE:
+    - message: 描述你关注的市场、板块或基金类型（必填）
+    - equity/bond/cash: 当前持仓金额（可选）
+
+    RETURNS: {report_html, path, errors[]}
+    """
+    return _hunt_opportunity(message, equity, bond, cash)
+
+
+# ── Agent 3: 持仓诊断 (Path C) ─────────────────────────────────────────
+
+@server.tool(name="持仓诊断")
+def diagnose_holdings(
+    message: str,
+    equity: float = 0,
+    bond: float = 0,
+    cash: float = 0,
+) -> dict:
+    """【路径C】持仓诊断Agent — 投资组合健康检查与风险排查。
+
+    执行流程:
+      数据收集 → 四维健康评分 → 单品红线审计 → 压力测试 → HTML报告
+
+    使用场景:
+    - "帮我检查下现在的持仓健不健康"
+    - "最近跌了不少，帮我看看组合有没有问题"
+    - "定期体检一下我的基金持仓"
+
+    HOW TO USE:
+    - message: 描述你的持仓情况和担忧（必填）
+    - equity/bond/cash: 当前持仓金额（可选，有就传）
+
+    RETURNS: {report_html, path, errors[]}
+    """
+    return _diagnose_holdings(message, equity, bond, cash)
+
+
+# ── Tool 7: Fund Audit ───────────────────────────────────────────────
 
 @server.tool()
 def audit_single_fund(
@@ -164,7 +255,7 @@ def audit_single_fund(
     )
 
 
-# ── Tool 5: Stress Testing ───────────────────────────────────────────
+# ── Tool 8: Stress Testing ───────────────────────────────────────────
 
 @server.tool()
 def run_scenario(
@@ -200,7 +291,7 @@ def run_scenario(
     return _run_scenario(equity, bond, cash, name)
 
 
-# ── Tool 6: Market Data ──────────────────────────────────────────────
+# ── Tool 9: Market Data ──────────────────────────────────────────────
 
 @server.tool()
 def lookup_fund(code: str, start: str = "", end: str = "") -> dict:
@@ -232,7 +323,7 @@ def lookup_fund(code: str, start: str = "", end: str = "") -> dict:
     return _lookup_fund(code, start, end)
 
 
-# ── Tool 7: Index Data ────────────────────────────────────────────────
+# ── Tool 10: Index Data ────────────────────────────────────────────────
 
 @server.tool()
 def lookup_index(code: str, start: str = "", end: str = "") -> dict:
@@ -260,7 +351,7 @@ def lookup_index(code: str, start: str = "", end: str = "") -> dict:
     return _lookup_index(code, start, end)
 
 
-# ── Tool 8: Hard Rules ────────────────────────────────────────────────
+# ── Tool 11: Hard Rules ────────────────────────────────────────────────
 
 @server.tool()
 def list_hard_rules() -> dict:
@@ -283,7 +374,7 @@ def list_hard_rules() -> dict:
     return _list_hard_rules()
 
 
-# ── Tool 9: Portfolio Health ─────────────────────────────────────────
+# ── Tool 12: Portfolio Health ─────────────────────────────────────────
 
 @server.tool()
 def check_health(
@@ -325,7 +416,7 @@ def check_health(
     )
 
 
-# ── Tool 10: Market Regime ───────────────────────────────────────────
+# ── Tool 13: Market Regime ───────────────────────────────────────────
 
 @server.tool()
 def detect_regime(
@@ -358,7 +449,7 @@ def detect_regime(
     return _detect_regime(current, ma200, ma120, risk_level)
 
 
-# ── Tool 11: Personal Rules ──────────────────────────────────────────
+# ── Tool 14: Personal Rules ──────────────────────────────────────────
 
 @server.tool()
 def manage_personal_rules(
@@ -397,7 +488,7 @@ def manage_personal_rules(
     )
 
 
-# ── Tool 12: Fund Screening ───────────────────────────────────────────
+# ── Tool 15: Fund Screening ───────────────────────────────────────────
 
 @server.tool()
 def screen_funds(
