@@ -40,7 +40,10 @@ def _get_or_load_category_averages() -> dict[str, dict[str, float]]:
         try:
             from src.data.sources.fund_pool import fetch_fund_pool
             pool = fetch_fund_pool()
-            _category_averages = compute_category_averages(pool)
+            # Compute both granular and broad averages
+            raw = compute_category_averages(pool, group_by="raw")
+            broad = compute_category_averages(pool, group_by="broad")
+            _category_averages = {"raw": raw, "broad": broad}
 
             # Persist to cache
             cache.set(
@@ -60,9 +63,17 @@ def _enrich_peer_comparison(
     fund_type: str,
     nav_data: dict | None,
 ) -> dict:
-    """Add peer_comparison dict to a screening result."""
+    """Add peer_comparison dict to a screening result.
+
+    Uses raw_type (granular) comparison when available from the fund pool
+    data, falling back to broad category comparison.
+    """
     averages = _get_or_load_category_averages()
-    cat_avg = averages.get(fund_type, {})
+    raw = averages.get("raw", {}) if averages else {}
+    broad = averages.get("broad", {}) if averages else {}
+
+    # Prefer granular, fall back to broad
+    cat_avg = raw.get(fund_type) or broad.get(fund_type) or {}
 
     # Compute fund's 1-year return from nav_data if available
     fund_ret_1y: float | None = None

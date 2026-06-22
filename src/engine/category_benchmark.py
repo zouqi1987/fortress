@@ -11,37 +11,41 @@ PERIODS = ("ret_1m", "ret_3m", "ret_6m", "ret_1y", "ret_3y")
 
 def compute_category_averages(
     funds: list[PoolFund],
+    group_by: str = "broad",
 ) -> dict[str, dict[str, float]]:
-    """Return {fund_type: {period: avg_return_pct}} for each category.
+    """Return {category: {period: avg_return_pct}} for each category.
 
-    Groups funds by fund_type, computes arithmetic mean per period.
-    Funds with all-zero returns are included (they represent the real
-    market distribution). An empty input returns {}.
+    Groups funds by classification, computes arithmetic mean per period.
+    An empty input returns {}.
 
     Args:
         funds: List of PoolFund objects (from fund pool).
+        group_by: "broad" (default) — uses fund_type (5 categories: bond/mixed/...).
+                  "raw" — uses raw_type (29 categories: 债券型-长债/混合型-偏股/...).
 
     Returns:
-        Nested dict keyed by fund_type string → period name → average.
-        Example: {"bond": {"ret_1y": 5.4, ...}, "mixed": {"ret_1y": 12.1, ...}}
+        Nested dict keyed by category string → period name → average.
     """
     if not funds:
         return {}
 
+    attr = "raw_type" if group_by == "raw" else "fund_type"
+
     # Group by type
     groups: dict[str, list[PoolFund]] = {}
     for f in funds:
-        groups.setdefault(f.fund_type, []).append(f)
+        key = getattr(f, attr, f.fund_type)
+        groups.setdefault(key, []).append(f)
 
     # Compute averages per group per period
     result: dict[str, dict[str, float]] = {}
-    for ftype, group in groups.items():
+    for gtype, group in groups.items():
         if not group:
             continue
         avgs: dict[str, float] = {}
         for period in PERIODS:
             values = [getattr(f, period, 0.0) for f in group]
             avgs[period] = sum(values) / len(values)
-        result[ftype] = avgs
+        result[gtype] = avgs
 
     return result

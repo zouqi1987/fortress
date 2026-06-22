@@ -7,11 +7,12 @@ from src.data.sources.fund_pool import PoolFund
 from src.engine.category_benchmark import compute_category_averages
 
 
-def _make_pool_fund(code, name, fund_type="bond", **returns):
+def _make_pool_fund(code, name, fund_type="bond", raw_type="", **returns):
     """Helper: create a PoolFund with given return values, defaults to 0."""
     return PoolFund(
-        code=code, name=name, fund_type=fund_type, manager="test",
-        fee=Decimal("0.015"),
+        code=code, name=name, fund_type=fund_type,
+        raw_type=raw_type if raw_type else fund_type,
+        manager="test", fee=Decimal("0.015"),
         ret_1m=returns.get("ret_1m", 0.0),
         ret_3m=returns.get("ret_3m", 0.0),
         ret_6m=returns.get("ret_6m", 0.0),
@@ -68,3 +69,21 @@ class TestComputeCategoryAverages:
         result = compute_category_averages(funds)
         assert "other" in result
         assert result["other"]["ret_1y"] == pytest.approx(8.0)
+
+    def test_group_by_raw_separates_subtypes(self):
+        """group_by='raw' puts 债券型-长债 and 债券型-信用债 in separate buckets."""
+        funds = [
+            _make_pool_fund("001", "长债A", "bond", "债券型-长债", ret_1y=3.0),
+            _make_pool_fund("002", "长债B", "bond", "债券型-长债", ret_1y=5.0),
+            _make_pool_fund("003", "信用债A", "bond", "债券型-信用债", ret_1y=8.0),
+        ]
+        raw = compute_category_averages(funds, group_by="raw")
+        broad = compute_category_averages(funds, group_by="broad")
+        # Granular: two separate groups
+        assert "债券型-长债" in raw
+        assert "债券型-信用债" in raw
+        assert raw["债券型-长债"]["ret_1y"] == pytest.approx(4.0)
+        assert raw["债券型-信用债"]["ret_1y"] == pytest.approx(8.0)
+        # Broad: all merged into "bond"
+        assert "bond" in broad
+        assert broad["bond"]["ret_1y"] == pytest.approx(5.333, rel=1e-2)
