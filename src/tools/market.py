@@ -96,7 +96,7 @@ def lookup_fund(code: str, start: str = "", end: str = "") -> dict:
             "date_range": {"start": start_date.isoformat(), "end": end_date.isoformat()},
             "recent_nav": [
                 {"date": n.date.isoformat(), "nav": float(n.nav), "acc_nav": float(n.acc_nav)}
-                for n in navs[-5:]  # last 5 days
+                for n in navs[-252:]  # up to 1 year of trading days for v2 scoring
             ],
             **cache_meta,
         }
