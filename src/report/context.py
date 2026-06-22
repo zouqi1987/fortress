@@ -167,6 +167,22 @@ def build_context(state: ConversationState) -> dict:
     if errors:
         ctx["errors"] = list(errors)
 
+    # ── Category peer benchmarks ──────────────────────────────────────
+    try:
+        from src.tools.screener import _get_or_load_category_averages
+        averages = _get_or_load_category_averages()
+        if averages:
+            ctx["category_averages"] = {
+                ftype: {p: round(avg, 2) for p, avg in periods.items()}
+                for ftype, periods in averages.items()
+            }
+            ctx["category_period_labels"] = {
+                "ret_1m": "近1月", "ret_3m": "近3月", "ret_6m": "近6月",
+                "ret_1y": "近1年", "ret_3y": "近3年",
+            }
+    except Exception:
+        pass  # fund pool unavailable — skip peer comparison in report
+
     return ctx
 
 

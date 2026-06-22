@@ -196,6 +196,36 @@
 </section>
 {% endif %}
 
+{# §7.5. 同类对比 #}
+{% if category_averages %}
+<section id="peer">
+  <h2>§7.5. 同类基准参照</h2>
+  <p><small>数据来源：全市场基金池（19,747 只基金）各类别平均收益率。绿色=跑赢同类平均，红色=跑输。</small></p>
+  <table>
+    <thead><tr>
+      <th>类别</th>
+      <th>近1月</th>
+      <th>近3月</th>
+      <th>近6月</th>
+      <th>近1年</th>
+      <th>近3年</th>
+    </tr></thead>
+    <tbody>
+    {% for ftype, periods in category_averages.items() %}
+      <tr>
+        <td>{{ ftype }}</td>
+        <td class="num">{{ "%.2f%%"|format(periods.ret_1m) }}</td>
+        <td class="num">{{ "%.2f%%"|format(periods.ret_3m) }}</td>
+        <td class="num">{{ "%.2f%%"|format(periods.ret_6m) }}</td>
+        <td class="num">{{ "%.2f%%"|format(periods.ret_1y) }}</td>
+        <td class="num">{{ "%.2f%%"|format(periods.ret_3y) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 {# §8. 注意事项 #}
 {% if errors %}
 <section id="warnings">
