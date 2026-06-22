@@ -129,6 +129,29 @@ def _score_static(fund: FundInfo) -> int:
 # ── v2 Performance Scoring Functions ──────────────────────────────────
 
 
+def _compute_metrics(navs: list[float]) -> tuple[float, float] | None:
+    """Compute 1-year return and annualized volatility from NAV sequence.
+
+    Returns (ret_1y, ann_vol) or None if insufficient data (< 63 points).
+    Used by risk control scoring and personalization to avoid DRY violation.
+    """
+    if len(navs) < 63:
+        return None
+    prices = [float(v) for v in navs]
+    ret_1y = (prices[-1] / prices[0] - 1) if prices[0] > 0 else 0.0
+    daily_returns = [
+        prices[i] / prices[i - 1] - 1
+        for i in range(1, len(prices))
+        if prices[i - 1] > 0
+    ]
+    if len(daily_returns) < 10:
+        return None
+    mean_r = sum(daily_returns) / len(daily_returns)
+    variance = sum((x - mean_r) ** 2 for x in daily_returns) / len(daily_returns)
+    ann_vol = variance ** 0.5 * (252 ** 0.5)
+    return (ret_1y, ann_vol)
+
+
 def score_performance(navs: list[float], benchmark: list[float] | None = None) -> int:
     """Score multi-period returns (0–25). Recent periods weighted higher.
 
@@ -183,13 +206,11 @@ def score_performance(navs: list[float], benchmark: list[float] | None = None) -
 def score_risk_control(navs: list[float]) -> int:
     """Score risk control (0–20). Lower drawdown + lower volatility = higher.
 
-    Accepts float or Decimal NAVs — converts to float internally to avoid
-    Decimal ** float TypeError from the API data layer.
+    Uses _compute_metrics for shared volatility/drawdown computation.
     """
     if len(navs) < 63:
         return 0
 
-    # Convert to float (API returns Decimal, math needs float ** float)
     prices = [float(v) for v in navs]
 
     # Max drawdown penalty (0–10)
@@ -212,18 +233,12 @@ def score_risk_control(navs: list[float]) -> int:
     elif max_dd < -0.05:
         dd_score = 8
 
-    # Volatility penalty (0–10)
-    daily_returns = [
-        prices[i] / prices[i - 1] - 1
-        for i in range(1, len(prices))
-        if prices[i - 1] > 0
-    ]
-    if len(daily_returns) < 10:
+    # Volatility penalty (0–10) — uses shared helper
+    metrics = _compute_metrics(navs)
+    if metrics is None:
         return dd_score
 
-    mean_r = sum(daily_returns) / len(daily_returns)
-    variance = sum((r - mean_r) ** 2 for r in daily_returns) / len(daily_returns)
-    ann_vol = variance ** 0.5 * (252 ** 0.5)
+    ann_vol = metrics[1]
 
     vol_score = 10
     if ann_vol > 0.40:
@@ -296,6 +311,64 @@ def score_manager(manager) -> int:
         score = max(0, score - 1)
 
     return min(5, score)
+
+
+def apply_risk_personalization(
+    results: list,
+    nav_data: dict[str, list[float]],
+    risk_level: str,
+) -> list:
+    """Apply risk-level adjustments to screening scores.
+
+    conservative: penalize volatile funds (>15% ann_vol → -10, >8% → -5),
+                  reward very stable ones (<3% → +3).
+    aggressive: reward high return funds (>10% 1y → +5),
+                penalize too-safe (<1% 1y → -3).
+    moderate: no adjustment.
+
+    ScreenResult is frozen, so we rebuild results with adjusted scores.
+    """
+    if risk_level not in ("conservative", "aggressive"):
+        return results
+
+    adj: dict[str, int] = {}
+    for r in results:
+        nv = nav_data.get(r.fund.code, [])
+        metrics = _compute_metrics(nv)
+        if metrics is None:
+            continue
+        ret_1y, ann_vol = metrics
+
+        delta = 0
+        if risk_level == "conservative":
+            if ann_vol > 0.15:
+                delta = -10
+            elif ann_vol > 0.08:
+                delta = -5
+            elif ann_vol < 0.03:
+                delta = 3
+        elif risk_level == "aggressive":
+            if ret_1y > 0.10:
+                delta = 5
+            elif ret_1y < 0.01 and ret_1y >= 0:
+                delta = -3
+
+        if delta != 0:
+            adj[r.fund.code] = delta
+
+    if not adj:
+        return results
+
+    adjusted = [
+        ScreenResult(
+            fund=r.fund,
+            score=max(0, min(100, r.score + adj.get(r.fund.code, 0))),
+            warnings=r.warnings,
+        )
+        for r in results
+    ]
+    adjusted.sort(key=lambda r: r.score, reverse=True)
+    return adjusted
 
 
 # ── Bulk Screening (uses pre-computed returns from fund pool) ──────

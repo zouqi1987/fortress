@@ -7,10 +7,12 @@ import pytest
 from src.data.sources.manager import ManagerInfo
 from src.datatypes import FundInfo
 from src.engine.screener import (
+    ScreenConfig,
     score_consistency,
     score_manager,
     score_performance,
     score_risk_control,
+    screen_funds,
 )
 
 
@@ -40,6 +42,57 @@ class TestScorePerformance:
     def test_too_few_nav_returns_zero(self):
         s = score_performance([])
         assert s == 0
+
+    # ── Benchmark-relative tests ───────────────────────────────────
+
+    def test_beating_benchmark_gets_full_points(self):
+        """Fund returns +10%, benchmark +2% → excess > +2% → full points."""
+        fund_navs = [1.0]
+        bench_navs = [1.0]
+        for _ in range(260):
+            fund_navs.append(fund_navs[-1] * 1.0004)   # ~10% annual
+            bench_navs.append(bench_navs[-1] * 1.00008)  # ~2% annual
+        s = score_performance(fund_navs, bench_navs)
+        assert s >= 8  # should get meaningful points for outperformance
+
+    def test_matching_benchmark_gets_reduced_points(self):
+        """Fund and benchmark return same ~2% → excess near 0 → reduced."""
+        navs = [1.0]
+        for _ in range(260):
+            navs.append(navs[-1] * 1.00008)  # ~2% annual
+        s = score_performance(navs, navs)  # same data as benchmark
+        assert s < 15  # excess=0 → 80% of full on available periods
+
+    def test_severe_underperformance_scores_zero(self):
+        """Fund -2%, benchmark +10% → excess -12% → near zero (short periods
+        get partial credit since excess is diluted)."""
+        fund_navs = [1.0]
+        bench_navs = [1.0]
+        for _ in range(260):
+            fund_navs.append(fund_navs[-1] * 0.99992)  # ~-2% annual
+            bench_navs.append(bench_navs[-1] * 1.0004)   # ~10% annual
+        s = score_performance(fund_navs, bench_navs)
+        assert s <= 3  # 1m/3m excess > -2%/-5% gets minimal partial credit
+
+    def test_falls_back_to_absolute_when_no_benchmark(self):
+        """Without benchmark, uses absolute positive/negative logic."""
+        navs = [1.0]
+        for _ in range(260):
+            navs.append(navs[-1] * 1.0001)
+        with_bench = score_performance(navs, navs)   # excess always 0
+        without_bench = score_performance(navs)         # absolute
+        assert without_bench != with_bench  # different scoring paths
+
+    def test_benchmark_too_short_falls_back(self):
+        """Benchmark shorter than period → uses absolute fallback."""
+        fund_navs = [1.0]
+        for _ in range(260):
+            fund_navs.append(fund_navs[-1] * 1.0001)
+        short_bench = [1.0, 1.01]  # only 2 data points
+        # With short benchmark, falls back to absolute
+        s_with = score_performance(fund_navs, short_bench)
+        s_without = score_performance(fund_navs)
+        assert s_with == s_without
 
 
 class TestScoreRiskControl:
@@ -113,3 +166,67 @@ class TestScoreManager:
 
     def test_none_manager_returns_zero(self):
         assert score_manager(None) == 0
+
+
+# ── Integration: screen_funds with benchmark_data ──────────────────
+
+
+def _make_fund(code, name, fund_type="bond", size=10_000_000_000):
+    return FundInfo(
+        code=code, name=name, type=fund_type,
+        net_asset_value=Decimal(str(size)),
+        fee_rate=Decimal("0.015"),
+        inception_date=date(2015, 1, 1),
+    )
+
+
+class TestScreenFundsWithBenchmark:
+
+    def test_benchmark_reduces_score_for_underperformer(self):
+        """Fund underperforming benchmark scores lower than without it."""
+        fund_navs = [1.0]
+        bench_navs = [1.0]
+        for _ in range(260):
+            fund_navs.append(fund_navs[-1] * 1.00008)   # ~2% annual (underperform)
+            bench_navs.append(bench_navs[-1] * 1.0004)    # ~10% annual (benchmark)
+        fund = _make_fund("TEST01", "测试债基")
+
+        config = ScreenConfig()
+        result_without = screen_funds([fund], config, nav_data={"TEST01": fund_navs})
+        result_with = screen_funds([fund], config, nav_data={"TEST01": fund_navs},
+                                   benchmark_data={"bond": bench_navs})
+        assert len(result_without) == 1
+        assert len(result_with) == 1
+        assert result_with[0].score < result_without[0].score
+
+    def test_benchmark_does_not_punish_outperformer(self):
+        """Fund outperforming benchmark should score approximately the same
+        (short-period excess may not cross +2% threshold for 80%-full,
+        but overall score stays within a small margin of absolute scoring)."""
+        fund_navs = [1.0]
+        bench_navs = [1.0]
+        for _ in range(260):
+            fund_navs.append(fund_navs[-1] * 1.0004)     # ~10% (outperform)
+            bench_navs.append(bench_navs[-1] * 1.00008)   # ~2% (benchmark)
+        fund = _make_fund("TEST02", "优质债基")
+
+        config = ScreenConfig()
+        result_without = screen_funds([fund], config, nav_data={"TEST02": fund_navs})
+        result_with = screen_funds([fund], config, nav_data={"TEST02": fund_navs},
+                                   benchmark_data={"bond": bench_navs})
+        # Should not be severely penalized — within 5 points of absolute
+        assert abs(result_with[0].score - result_without[0].score) <= 5
+
+    def test_no_benchmark_for_type_uses_absolute_scoring(self):
+        """Fund type not in benchmark_data → falls back to absolute scoring."""
+        fund_navs = [1.0]
+        for _ in range(260):
+            fund_navs.append(fund_navs[-1] * 1.0001)
+        fund = _make_fund("TEST03", "混合基金", fund_type="mixed")
+
+        config = ScreenConfig()
+        result_without = screen_funds([fund], config, nav_data={"TEST03": fund_navs})
+        # benchmark only has "bond" key, not "mixed"
+        result_with = screen_funds([fund], config, nav_data={"TEST03": fund_navs},
+                                   benchmark_data={"bond": [1.0, 1.05]})
+        assert result_with[0].score == result_without[0].score
