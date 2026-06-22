@@ -31,11 +31,13 @@ def screen_funds(
     config: ScreenConfig,
     nav_data: dict[str, list[float]] | None = None,
     manager_data: dict[str, object] | None = None,
+    benchmark_data: dict[str, list[float]] | None = None,
 ) -> list[ScreenResult]:
     """Filter and score a list of funds.
 
     v1 mode (default): static scoring only (size/age/fee/type), 100 points.
     v2 mode (nav_data + manager_data provided): full 5-dimension scoring.
+    benchmark_data: optional {fund_type: [benchmark_navs]} for relative scoring.
 
     Returns results sorted by score descending.
     """
@@ -59,13 +61,14 @@ def screen_funds(
             # ── v2: 5-dimension scoring (0–100) ─────────────────────
             nv = nav_data[fund.code]
             mgr = manager_data.get(fund.code) if manager_data else None
+            bench = benchmark_data.get(fund.type) if benchmark_data else None
 
             # Static (0–40): scaled from v1
             static = _score_static(fund)
             static_scaled = int(static * 40 / 100)
 
-            # Performance (0–25)
-            perf = score_performance(nv)
+            # Performance (0–25): relative to benchmark when available
+            perf = score_performance(nv, bench)
 
             # Risk control (0–20)
             risk = score_risk_control(nv)
@@ -126,10 +129,16 @@ def _score_static(fund: FundInfo) -> int:
 # ── v2 Performance Scoring Functions ──────────────────────────────────
 
 
-def score_performance(navs: list[float]) -> int:
+def score_performance(navs: list[float], benchmark: list[float] | None = None) -> int:
     """Score multi-period returns (0–25). Recent periods weighted higher.
 
-    1m:3pts 3m:5pts 6m:5pts 1y:7pts 3y:5pts. Positive → full; zero → half.
+    1m:3pts 3m:5pts 6m:5pts 1y:7pts. Positive → full; slightly negative → half.
+    When benchmark NAV history is provided, scores excess return instead:
+      excess > +2%: full points
+      excess > 0:   80% points
+      excess > -2%: 50% points
+      excess > -5%: 25% points
+      excess <= -5%: 0 points
     """
     if len(navs) < 22:
         return 0
@@ -145,6 +154,24 @@ def score_performance(navs: list[float]) -> int:
         if start_nav <= 0:
             continue
         ret = (end_nav / start_nav - 1)
+
+        # ── Benchmark-relative scoring ──────────────────────────────
+        if benchmark and len(benchmark) > days:
+            b_start = benchmark[-days - 1] if len(benchmark) > days else benchmark[0]
+            b_end = benchmark[-1]
+            if b_start > 0:
+                excess = ret - (b_end / b_start - 1)
+                if excess > 0.02:
+                    score += pts
+                elif excess > 0:
+                    score += int(pts * 0.8)
+                elif excess > -0.02:
+                    score += pts // 2
+                elif excess > -0.05:
+                    score += int(pts * 0.25)
+                continue
+
+        # ── Absolute fallback (no benchmark or insufficient data) ────
         if ret > 0:
             score += pts
         elif ret > -0.05:
