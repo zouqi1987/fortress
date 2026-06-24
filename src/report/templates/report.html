@@ -196,11 +196,15 @@
 </section>
 {% endif %}
 
-{# §7.5. 同类对比 #}
-{% if category_averages %}
+{# §7.5. 同类对比 + 维度评分 #}
+{% if category_averages or screening_breakdown %}
 <section id="peer">
-  <h2>§7.5. 同类基准参照</h2>
-  <p><small>数据来源：全市场基金池（19,747 只基金）各类别平均收益率。绿色=跑赢同类平均，红色=跑输。</small></p>
+  <h2>§7.5. 同类基准与维度评分</h2>
+
+  {# Category averages table #}
+  {% if category_averages %}
+  <h3>同类平均收益率</h3>
+  <p><small>数据来源：全市场基金池各类别平均收益率。</small></p>
   <table>
     <thead><tr>
       <th>类别</th>
@@ -223,6 +227,72 @@
     {% endfor %}
     </tbody>
   </table>
+  {% endif %}
+
+  {# Per-fund dimension breakdown #}
+  {% if screening_breakdown %}
+  <h3>基金维度评分明细</h3>
+  <table>
+    <thead><tr>
+      <th>基金代码</th>
+      <th>基金名称</th>
+      <th>类型</th>
+      <th>机构共识</th>
+      <th>同类业绩</th>
+      <th>风控</th>
+      <th>持续性</th>
+      <th>费率</th>
+      <th>综合分</th>
+    </tr></thead>
+    <tbody>
+    {% for item in screening_breakdown %}
+      <tr>
+        <td>{{ item.code }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.fund_type_class }}</td>
+        <td class="num">{{ item.dimensions.institutional_consensus }}</td>
+        <td class="num">{{ item.dimensions.peer_performance }}</td>
+        <td class="num">{{ item.dimensions.risk_control if item.dimensions.risk_control is defined else "N/A" }}</td>
+        <td class="num">{{ item.dimensions.persistence if item.dimensions.persistence is defined else "N/A" }}</td>
+        <td class="num">{{ item.dimensions.fee }}</td>
+        <td class="num"><strong>{{ item.score }}</strong></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# Active weight table #}
+  {% if risk_weights %}
+  <h3>评分权重表（按基金类型 × 风险画像）</h3>
+  <table>
+    <thead><tr>
+      <th>基金类型</th>
+      <th>风险画像</th>
+      <th>机构共识</th>
+      <th>同类业绩</th>
+      <th>风控</th>
+      <th>持续性</th>
+      <th>费率</th>
+    </tr></thead>
+    <tbody>
+    {% for fund_class, profiles in risk_weights.items() %}
+      {% for risk_level, weights in profiles.items() %}
+      <tr>
+        <td>{{ fund_class }}</td>
+        <td>{{ risk_level }}</td>
+        <td class="num">{{ "%.0f%%"|format(weights.institutional_consensus * 100) if weights.institutional_consensus is defined else "—" }}</td>
+        <td class="num">{{ "%.0f%%"|format(weights.peer_performance * 100) if weights.peer_performance is defined else "—" }}</td>
+        <td class="num">{{ "%.0f%%"|format(weights.risk_control * 100) if weights.risk_control is defined else "N/A" }}</td>
+        <td class="num">{{ "%.0f%%"|format(weights.persistence * 100) if weights.persistence is defined else "N/A" }}</td>
+        <td class="num">{{ "%.0f%%"|format(weights.fee * 100) if weights.fee is defined else "—" }}</td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
 </section>
 {% endif %}
 

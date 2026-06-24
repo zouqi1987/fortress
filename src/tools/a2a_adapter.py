@@ -195,7 +195,7 @@ AGENT_CARD: dict = {
         },
         {
             "name": "screen_funds",
-            "description": "筛选并评分基金列表（v1静态/v2五维）",
+            "description": "筛选并评分基金列表 — 统一5维度加权评分",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -203,7 +203,7 @@ AGENT_CARD: dict = {
                     "min_net_asset_value": {"type": "number"},
                     "allowed_types": {"type": "string"},
                     "max_fee_rate": {"type": "number"},
-                    "nav_data": {"type": "object"},
+                    "risk_level": {"type": "string", "description": "conservative|moderate|aggressive"},
                 },
                 "required": ["funds"],
             },

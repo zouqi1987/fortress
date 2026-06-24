@@ -503,12 +503,12 @@ def screen_funds(
     min_net_asset_value: float = 0,
     allowed_types: str = "",
     max_fee_rate: float = 0.03,
-    nav_data: dict | None = None,
+    risk_level: str = "",
 ) -> dict:
-    """筛选并评分一组基金。v1 静态评分；提供 nav_data 时启用 v2 五维评分。
+    """筛选并评分基金列表 — 统一 5 维度加权评分。
 
-    v1 (default): 规模 + 成立年限 + 费率 + 类型，0-100 分。
-    v2 (with nav_data): 五维评分 — 静态40 + 业绩25 + 风控20 + 持续性10 + 经理5。
+    5 dimensions: 机构共识 / 同类业绩 / 风控 / 持续性 / 费率
+    每维度 0-100,按基金类型(主动/被动/货币) × 风险画像 加权。
 
     WHEN TO USE:
     - 用户问"哪些基金最好"、"帮我选基金"
@@ -520,12 +520,12 @@ def screen_funds(
     - min_net_asset_value: 最低规模过滤（元），默认0不过滤
     - allowed_types: 逗号分隔，如 "bond,mixed"，空=全部
     - max_fee_rate: 最高可接受费率，默认 0.03 (3%)
-    - nav_data: 可选，{code: [净值序列]} 用于 v2 五维评分
+    - risk_level: "conservative"|"moderate"|"aggressive"，空=moderate
 
-    RETURNS: {count, results[{code, name, type, score, warnings[]}]}
+    RETURNS: {count, results[{code, name, type, score, dimension_breakdown, warnings[]}]}
     - results 按 score 降序排列
     """
-    return _screen_funds(funds, min_net_asset_value, allowed_types, max_fee_rate, nav_data)
+    return _screen_funds(funds, min_net_asset_value, allowed_types, max_fee_rate, risk_level)
 
 
 # ── Tool 16: Report Export ───────────────────────────────────────────

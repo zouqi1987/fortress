@@ -172,16 +172,36 @@ def build_context(state: ConversationState) -> dict:
         from src.tools.screener import _get_or_load_category_averages
         averages = _get_or_load_category_averages()
         if averages:
+            # averages is {"raw": {...}, "broad": {...}} — use broad for report
+            broad = averages.get("broad", averages) if isinstance(averages, dict) and "broad" in averages else averages
             ctx["category_averages"] = {
                 ftype: {p: round(avg, 2) for p, avg in periods.items()}
-                for ftype, periods in averages.items()
-            }
-            ctx["category_period_labels"] = {
-                "ret_1m": "近1月", "ret_3m": "近3月", "ret_6m": "近6月",
-                "ret_1y": "近1年", "ret_3y": "近3年",
+                for ftype, periods in broad.items()
             }
     except Exception:
         pass  # fund pool unavailable — skip peer comparison in report
+
+    # ── Risk weight table (for display) ────────────────────────────────
+    try:
+        from src.engine.risk_personalization import WEIGHTS
+        ctx["risk_weights"] = WEIGHTS
+    except Exception:
+        pass
+
+    # ── Screening results dimension breakdown (if available in state) ──
+    screening_results = state.get("screening_results")
+    if screening_results:
+        ctx["screening_breakdown"] = [
+            {
+                "code": r.get("code", ""),
+                "name": r.get("name", ""),
+                "type": r.get("type", ""),
+                "fund_type_class": r.get("fund_type_class", ""),
+                "score": r.get("score", 0),
+                "dimensions": r.get("dimension_breakdown", {}),
+            }
+            for r in screening_results.get("results", [])
+        ]
 
     return ctx
 
