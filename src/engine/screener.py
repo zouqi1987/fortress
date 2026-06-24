@@ -1,12 +1,19 @@
 """Fund screening and ranking engine.
 
 Zero I/O. Pure functions: receive FundInfo list + config, return scored results.
+
+Unified scoring (score_funds): 5 weighted dimensions grounded in Morningstar
+Medalist + 济安金信 methodology. NAV from NavStore. Funds with insufficient
+data are excluded — never fabricated.
 """
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from src.datatypes import FundInfo, fmt_amount
+from src.datatypes import FundInfo, InsufficientDataError, fmt_amount
+from src.engine.institutional_consensus import score_institutional_consensus
+from src.engine.peer_scoring import score_peer_performance
+from src.engine.risk_personalization import classify_fund_type, get_weights
 
 
 @dataclass(frozen=True)
@@ -24,28 +31,49 @@ class ScreenResult:
     fund: FundInfo
     score: int  # 0–100, higher = better
     warnings: tuple[str, ...]
+    dimension_breakdown: dict[str, int] = field(default_factory=dict)
 
 
-def screen_funds(
+# ── Unified scoring (score_funds) ─────────────────────────────────────
+
+
+def score_funds(
     funds: list[FundInfo],
     config: ScreenConfig,
-    nav_data: dict[str, list[float]] | None = None,
-    manager_data: dict[str, object] | None = None,
-    benchmark_data: dict[str, list[float]] | None = None,
+    nav_store: "NavStore",
+    pool_index: dict[str, "PoolFund"],
+    category_averages: dict[str, dict[str, float]],
+    risk_level: str = "moderate",
 ) -> list[ScreenResult]:
-    """Filter and score a list of funds.
+    """Unified fund scoring — 5 weighted dimensions, no v1/v2 branch.
 
-    v1 mode (default): static scoring only (size/age/fee/type), 100 points.
-    v2 mode (nav_data + manager_data provided): full 5-dimension scoring.
-    benchmark_data: optional {fund_type: [benchmark_navs]} for relative scoring.
+    Dimensions (each 0-100, then weighted by fund-type × risk-profile):
+      - institutional_consensus: 4 agency ratings (PoolFund)
+      - peer_performance: 5-period excess vs category avg (PoolFund)
+      - risk_control: NAV volatility + max drawdown (NavStore) — not for money
+      - persistence: NAV return stability (NavStore) — not for money
+      - fee: fee rate (FundInfo)
 
-    Returns results sorted by score descending.
+    Funds with insufficient data are EXCLUDED (not scored with fabricated values):
+      - All 4 agency ratings = 0 → excluded
+      - NAV < 63 points (non-money) → excluded
+      - Fund not in pool_index → excluded
+
+    Args:
+        funds: List of funds to screen.
+        config: Screening parameters (filters).
+        nav_store: Persistent NAV time-series store.
+        pool_index: {code: PoolFund} for ratings + returns.
+        category_averages: {fund_type: {period: avg_return}} from compute_category_averages.
+        risk_level: "conservative" | "moderate" | "aggressive".
+
+    Returns:
+        ScreenResult list sorted by score descending. Each has dimension_breakdown.
     """
-    use_v2 = nav_data is not None
     results: list[ScreenResult] = []
 
     for fund in funds:
-        # ── Hard filters ────────────────────────────────────────────
+        # ── Hard filters (same as screen_funds) ─────────────────────
         if fund.net_asset_value < config.min_net_asset_value:
             continue
         if fund.type not in config.allowed_types:
@@ -55,36 +83,62 @@ def screen_funds(
         if fund.fee_rate > config.max_fee_rate:
             continue
 
+        # ── Get PoolFund (required for consensus + peer) ──────────────
+        pool_fund = pool_index.get(fund.code)
+        if pool_fund is None:
+            continue  # excluded — no pool data
+
+        fund_class = classify_fund_type(fund.type)
+        weights = get_weights(fund_class, risk_level)  # raises ValueError if invalid
+        dimensions: dict[str, int] = {}
         warnings: list[str] = []
 
-        if use_v2 and fund.code in nav_data:
-            # ── v2: 5-dimension scoring (0–100) ─────────────────────
-            nv = nav_data[fund.code]
-            mgr = manager_data.get(fund.code) if manager_data else None
-            bench = benchmark_data.get(fund.type) if benchmark_data else None
+        # ── Dimension 1: Institutional consensus ─────────────────────
+        try:
+            ratings = {
+                "morningstar": pool_fund.rating_morningstar,
+                "shanghai": pool_fund.rating_shanghai,
+                "zhaoshang": pool_fund.rating_zhaoshang,
+                "jiAn": pool_fund.rating_jiAn,
+            }
+            dimensions["institutional_consensus"] = score_institutional_consensus(ratings)
+        except InsufficientDataError:
+            continue  # excluded — no ratings
 
-            # Static (0–40): scaled from v1
-            static = _score_static(fund)
-            static_scaled = int(static * 40 / 100)
+        # ── Dimension 2: Peer performance ────────────────────────────
+        fund_returns = {
+            "ret_1m": pool_fund.ret_1m,
+            "ret_3m": pool_fund.ret_3m,
+            "ret_6m": pool_fund.ret_6m,
+            "ret_1y": pool_fund.ret_1y,
+            "ret_3y": pool_fund.ret_3y,
+        }
+        cat_key = pool_fund.raw_type or pool_fund.fund_type
+        cat_avg = category_averages.get(cat_key, category_averages.get(fund.type, {}))
+        if not cat_avg:
+            continue  # excluded — no category averages for this fund type
+        try:
+            dimensions["peer_performance"] = score_peer_performance(fund_returns, cat_avg)
+        except InsufficientDataError:
+            continue  # excluded — no returns
 
-            # Performance (0–25): relative to benchmark when available
-            perf = score_performance(nv, bench)
+        # ── Dimension 3: Fee ──────────────────────────────────────────
+        dimensions["fee"] = _score_fee(fund.fee_rate)
 
-            # Risk control (0–20)
-            risk = score_risk_control(nv)
+        # ── Dimensions 4-5: Risk control + Persistence (not for money) ─
+        if fund_class != "money":
+            nav_series = nav_store.get_nav_series(fund.code)
+            if len(nav_series) < 63:
+                continue  # excluded — insufficient NAV
+            # Rescale: score_risk_control returns 0-20, ×5 → 0-100
+            dimensions["risk_control"] = score_risk_control(nav_series) * 5
+            # Rescale: score_consistency returns 0-10, ×10 → 0-100
+            dimensions["persistence"] = score_consistency(nav_series) * 10
 
-            # Consistency (0–10)
-            cons = score_consistency(nv)
+        # ── Weighted final score ──────────────────────────────────────
+        score = int(sum(dimensions[d] * weights[d] for d in weights))
 
-            # Manager (0–5)
-            mgr_score = score_manager(mgr)
-
-            score = static_scaled + perf + risk + cons + mgr_score
-        else:
-            # ── v1: static-only scoring (0–100) ─────────────────────
-            score = _score_static(fund)
-
-        # ── Warnings ─────────────────────────────────────────────────
+        # ── Warnings (ported from screen_funds) ──────────────────────
         if fund.net_asset_value < Decimal("200_000_000"):
             warnings.append(f"基金规模 {fmt_amount(fund.net_asset_value)} 低于2亿")
         if (date.today() - fund.inception_date).days < 365:
@@ -92,10 +146,33 @@ def screen_funds(
         if fund.fee_rate > Decimal("0.015"):
             warnings.append(f"费率偏高 ({float(fund.fee_rate):.1%})")
 
-        results.append(ScreenResult(fund=fund, score=score, warnings=tuple(warnings)))
+        results.append(ScreenResult(
+            fund=fund, score=score, warnings=tuple(warnings),
+            dimension_breakdown=dimensions,
+        ))
 
     results.sort(key=lambda r: r.score, reverse=True)
     return results
+
+
+def _score_fee(fee_rate: Decimal) -> int:
+    """Score fee 0-100. Lower fee = higher score.
+
+    Morningstar: fee is paramount — "expenses have as much weight as the
+    other pillars combined." Fee tiers aligned with existing _score_static bands.
+    """
+    fee_pct = float(fee_rate) * 100  # Decimal 0.015 → 1.5%
+    if fee_pct <= 0.15:
+        return 100
+    if fee_pct <= 0.50:
+        return 85
+    if fee_pct <= 1.00:
+        return 70
+    if fee_pct <= 1.50:
+        return 55
+    if fee_pct <= 2.00:
+        return 35
+    return 15
 
 
 def _score_static(fund: FundInfo) -> int:
@@ -311,175 +388,4 @@ def score_manager(manager) -> int:
         score = max(0, score - 1)
 
     return min(5, score)
-
-
-def apply_risk_personalization(
-    results: list,
-    nav_data: dict[str, list[float]],
-    risk_level: str,
-) -> list:
-    """Apply risk-level adjustments to screening scores.
-
-    conservative: penalize volatile funds (>15% ann_vol → -10, >8% → -5),
-                  reward very stable ones (<3% → +3).
-    aggressive: reward high return funds (>10% 1y → +5),
-                penalize too-safe (<1% 1y → -3).
-    moderate: no adjustment.
-
-    ScreenResult is frozen, so we rebuild results with adjusted scores.
-    """
-    if risk_level not in ("conservative", "aggressive"):
-        return results
-
-    adj: dict[str, int] = {}
-    for r in results:
-        nv = nav_data.get(r.fund.code, [])
-        metrics = _compute_metrics(nv)
-        if metrics is None:
-            continue
-        ret_1y, ann_vol = metrics
-
-        delta = 0
-        if risk_level == "conservative":
-            if ann_vol > 0.15:
-                delta = -10
-            elif ann_vol > 0.08:
-                delta = -5
-            elif ann_vol < 0.03:
-                delta = 3
-        elif risk_level == "aggressive":
-            if ret_1y > 0.10:
-                delta = 5
-            elif ret_1y < 0.01 and ret_1y >= 0:
-                delta = -3
-
-        if delta != 0:
-            adj[r.fund.code] = delta
-
-    if not adj:
-        return results
-
-    adjusted = [
-        ScreenResult(
-            fund=r.fund,
-            score=max(0, min(100, r.score + adj.get(r.fund.code, 0))),
-            warnings=r.warnings,
-        )
-        for r in results
-    ]
-    adjusted.sort(key=lambda r: r.score, reverse=True)
-    return adjusted
-
-
-# ── Bulk Screening (uses pre-computed returns from fund pool) ──────
-
-
-def personalized_score(fund, profile=None) -> int:
-    """Score a fund with personalization from risk profile.
-
-    Without profile: same as score_bulk().
-    With profile: adjusts weights based on risk level, loss tolerance, experience.
-
-    Adjustments from questionnaire:
-      - max_loss_pct → penalize volatile funds for low-risk users
-      - experience → favor simpler products for novices
-      - product_bias → reweight risk vs return
-      - expected_return → verify fund can deliver
-    """
-    score = score_bulk(fund)
-
-    if profile is None:
-        return score
-
-    # ── Volatility penalty: low max_loss → avoid high-return/high-risk funds ─
-    if hasattr(profile, 'scores') and profile.scores.loss_tolerance < 10:
-        # User can't handle losses → penalize funds with extreme returns
-        if fund.ret_1y > 40:
-            score -= 10  # +40% funds are usually volatile
-        elif fund.ret_1y > 25:
-            score -= 5
-
-    # ── Experience: novice → prefer straightforward products ──────────
-    if hasattr(profile, 'scores') and profile.scores.experience < 10:
-        # Penalize complex products
-        if "可转债" in fund.name or "转债" in fund.name:
-            score -= 5  # convertible bonds are complex
-        if fund.fund_type == "index" and fund.ret_1y > 50:
-            score -= 3  # thematic index funds can be confusing
-
-    # ── Product bias ──────────────────────────────────────────────────
-    bias = getattr(profile, 'product_weight_bias', 'balanced')
-    if bias == "safety":
-        # Penalize funds with high returns (likely volatile)
-        if fund.ret_1y > 30:
-            score -= 8
-        # Reward funds with stability
-        if fund.ret_1y > 0 and fund.ret_3y > 0 and fund.ret_1y < 15:
-            score += 5  # consistent moderate performer
-    elif bias == "growth":
-        # Reward high performers
-        if fund.ret_1y > 20:
-            score += 5
-
-    # ── Expected return check ─────────────────────────────────────────
-    exp_ret = getattr(profile, 'expected_return_pct', None)
-    if exp_ret is not None:
-        exp = float(exp_ret)
-        # If user wants 5-8% and fund can't deliver, penalize
-        if exp > fund.ret_1y + 5 and fund.ret_1y < 3:
-            score -= 5  # fund can't meet user's target
-
-    return max(0, min(100, score))
-
-
-def score_bulk(fund) -> int:
-    """Score a PoolFund using pre-computed returns (0–100).
-
-    Dimensions: static(40) + returns(25) + rating(20) + consistency(10) + manager(5).
-    Uses pre-computed multi-period returns — no NAV fetch needed.
-    """
-    score = 0
-
-    # ── Returns (0–25): weighted multi-period ────────────────────────
-    # 1m:2 3m:3 6m:5 1y:10 3y:5
-    periods = [("ret_1m", 2), ("ret_3m", 3), ("ret_6m", 5), ("ret_1y", 10), ("ret_3y", 5)]
-    for attr, pts in periods:
-        ret = getattr(fund, attr, 0.0) or 0.0
-        if ret > 5:
-            score += pts
-        elif ret > 0:
-            score += pts // 2
-
-    # ── Risk/Rating proxy (0–20): average of 4 agency ratings ────────
-    ratings = [fund.rating_morningstar, fund.rating_shanghai, fund.rating_zhaoshang, fund.rating_jiAn]
-    valid_ratings = [r for r in ratings if r and r > 0]
-    if valid_ratings:
-        avg_rating = sum(valid_ratings) / len(valid_ratings)
-        score += min(20, int(avg_rating * 4))  # rating 5 → 20pts
-    elif fund.ret_1y > 0:
-        score += 10  # unrated but positive return
-
-    # ── Stability proxy (0–10): return trend consistency ─────────────
-    trends = [fund.ret_1m, fund.ret_3m, fund.ret_6m, fund.ret_1y]
-    positive_trends = sum(1 for t in trends if t and t > 0)
-    score += min(10, positive_trends * 2)
-
-    # ── Fee penalty ──────────────────────────────────────────────────
-    fee = float(fund.fee)
-    if fee <= 0.005:
-        score += 15
-    elif fee <= 0.010:
-        score += 10
-    elif fee <= 0.015:
-        score += 5
-
-    # ── Type bonus ───────────────────────────────────────────────────
-    type_bonus = {"bond": 10, "mixed": 8, "index": 6, "stock": 4, "money": 2}
-    score += type_bonus.get(fund.fund_type, 5)
-
-    # ── Manager name = known → bonus ────────────────────────────────
-    if fund.manager and fund.manager != "未知" and fund.manager != "":
-        score += 5
-
-    return min(100, score)
 

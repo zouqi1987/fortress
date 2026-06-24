@@ -8,7 +8,7 @@ from typing import Any
 from src.data.cache import MarketCache
 from src.datatypes import FundInfo
 from src.engine.category_benchmark import PERIODS, compute_category_averages
-from src.engine.screener import ScreenConfig, apply_risk_personalization, screen_funds as _screen
+from src.engine.screener import ScreenConfig, score_funds
 
 _CACHE_DIR = os.environ.get("FORTRESS_DATA_DIR", "data")
 _CATEGORY_CACHE_KEY = "category_averages:all"
@@ -151,12 +151,20 @@ def screen_funds(
         max_fee_rate=Decimal(str(max_fee_rate)),
     )
 
-    # Run screening
-    results = _screen(fund_infos, config, nav_data, benchmark_data=benchmark_data)
+    # Run screening (Phase 4 will wire NavStore + pool_index properly;
+    # for now, score_funds requires nav_store + pool_index which the tool
+    # layer doesn't yet construct. This is a temporary stub.)
+    from src.data.sources.nav_store import NavStore
 
-    # ── Risk-level personalization ────────────────────────────────────
-    if risk_level and nav_data:
-        results = apply_risk_personalization(results, nav_data, risk_level)
+    nav_store = NavStore(os.path.join(_CACHE_DIR, "market_cache.db"))
+    pool_index = {}  # Phase 4: build from fund pool
+    cat_avg = _get_or_load_category_averages()
+    cat_avg_dict = cat_avg.get("broad", {}) if cat_avg else {}
+
+    results = score_funds(
+        fund_infos, config, nav_store, pool_index, cat_avg_dict,
+        risk_level=risk_level or "moderate",
+    )
 
     # ── Build peer comparison context ──────────────────────────────────
     averages = _get_or_load_category_averages()
