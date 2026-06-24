@@ -1,11 +1,16 @@
 """Shared data types used by both engine/ and data/ layers.
 
-Zero-dependency leaf module. All types are frozen dataclasses.
+Zero-dependency leaf module. All data types are frozen dataclasses;
+InsufficientDataError is the sole exception class.
 engine/ and data/ both import from here — no cross-layer imports.
 """
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+
+
+class InsufficientDataError(Exception):
+    """Raised when a fund lacks required data for scoring — caller must exclude, not fabricate."""
 
 
 @dataclass(frozen=True)
