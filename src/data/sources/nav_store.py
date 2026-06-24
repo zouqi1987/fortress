@@ -460,3 +460,87 @@ class NavStore:
             self._conn.close()
         except Exception:
             pass
+
+
+# ── CLI entry point ──────────────────────────────────────────────────
+
+
+def _main():
+    """Command-line interface for NavStore operations.
+
+    Usage:
+      python3 -m src.data.sources.nav_store --backfill          # full market backfill
+      python3 -m src.data.sources.nav_store --backfill --period 1年  # shorter period
+      python3 -m src.data.sources.nav_store --update             # daily incremental
+      python3 -m src.data.sources.nav_store --stats              # inspect store
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="NavStore — fund NAV time-series storage management",
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--backfill", action="store_true",
+                       help="Backfill NAV history for all pool funds")
+    group.add_argument("--update", action="store_true",
+                       help="Daily incremental update (gap detection + recovery)")
+    group.add_argument("--stats", action="store_true",
+                       help="Print store statistics")
+    parser.add_argument("--period", default="3年",
+                        help="Backfill lookback period (default: 3年)")
+    parser.add_argument("--max-workers", type=int, default=5,
+                        help="Max concurrent HTTP workers (default: 5, per architecture rule)")
+    parser.add_argument("--db", default="data/market_cache.db",
+                        help="SQLite database path (default: data/market_cache.db)")
+    args = parser.parse_args()
+
+    store = NavStore(args.db)
+
+    if args.stats:
+        stats = store.stats()
+        coverage = store.coverage_report()
+        print(f"Fund count:     {stats['fund_count']}")
+        print(f"Total points:   {stats['total_points']}")
+        print(f"Date range:     {stats['date_range']}")
+        print(f"Latest date:    {coverage['latest_date']}")
+        return
+
+    if args.update:
+        report = store.update()
+        print(f"Action:         {report.action}")
+        print(f"Gap days:       {report.gap_days}")
+        print(f"Latest DB date: {report.latest_db_date}")
+        print(f"Latest trading: {report.latest_trading_date}")
+        print(f"Funds updated:  {report.funds_updated}")
+        print(f"Points added:   {report.points_added}")
+        return
+
+    if args.backfill:
+        # Fetch fund pool to get all codes
+        print("Fetching fund pool...", flush=True)
+        from src.data.sources.fund_pool import fetch_fund_pool
+        pool = fetch_fund_pool()
+        codes = [f.code for f in pool]
+        print(f"Backfilling {len(codes)} funds (period={args.period}, "
+              f"workers={args.max_workers})...", flush=True)
+
+        report = store.backfill(codes, period=args.period, max_workers=args.max_workers)
+        print(f"\nBackfill complete:")
+        print(f"  Fetched:     {report.fetched}")
+        print(f"  Skipped:     {report.skipped}")
+        print(f"  Failed:      {report.failed}")
+        print(f"  Points:      {report.point_count}")
+        if report.failed_codes:
+            print(f"  Failed codes (first 20): {report.failed_codes[:20]}")
+
+        # Print final stats
+        stats = store.stats()
+        print(f"\nStore stats:")
+        print(f"  Fund count:   {stats['fund_count']}")
+        print(f"  Total points: {stats['total_points']}")
+        print(f"  Date range:   {stats['date_range']}")
+        return
+
+
+if __name__ == "__main__":
+    _main()
