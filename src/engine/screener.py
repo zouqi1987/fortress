@@ -31,11 +31,13 @@ def screen_funds(
     config: ScreenConfig,
     nav_data: dict[str, list[float]] | None = None,
     manager_data: dict[str, object] | None = None,
+    benchmark_data: dict[str, list[float]] | None = None,
 ) -> list[ScreenResult]:
     """Filter and score a list of funds.
 
     v1 mode (default): static scoring only (size/age/fee/type), 100 points.
     v2 mode (nav_data + manager_data provided): full 5-dimension scoring.
+    benchmark_data: optional {fund_type: [benchmark_navs]} for relative scoring.
 
     Returns results sorted by score descending.
     """
@@ -59,13 +61,14 @@ def screen_funds(
             # ── v2: 5-dimension scoring (0–100) ─────────────────────
             nv = nav_data[fund.code]
             mgr = manager_data.get(fund.code) if manager_data else None
+            bench = benchmark_data.get(fund.type) if benchmark_data else None
 
             # Static (0–40): scaled from v1
             static = _score_static(fund)
             static_scaled = int(static * 40 / 100)
 
-            # Performance (0–25)
-            perf = score_performance(nv)
+            # Performance (0–25): relative to benchmark when available
+            perf = score_performance(nv, bench)
 
             # Risk control (0–20)
             risk = score_risk_control(nv)
@@ -126,10 +129,39 @@ def _score_static(fund: FundInfo) -> int:
 # ── v2 Performance Scoring Functions ──────────────────────────────────
 
 
-def score_performance(navs: list[float]) -> int:
+def _compute_metrics(navs: list[float]) -> tuple[float, float] | None:
+    """Compute 1-year return and annualized volatility from NAV sequence.
+
+    Returns (ret_1y, ann_vol) or None if insufficient data (< 63 points).
+    Used by risk control scoring and personalization to avoid DRY violation.
+    """
+    if len(navs) < 63:
+        return None
+    prices = [float(v) for v in navs]
+    ret_1y = (prices[-1] / prices[0] - 1) if prices[0] > 0 else 0.0
+    daily_returns = [
+        prices[i] / prices[i - 1] - 1
+        for i in range(1, len(prices))
+        if prices[i - 1] > 0
+    ]
+    if len(daily_returns) < 10:
+        return None
+    mean_r = sum(daily_returns) / len(daily_returns)
+    variance = sum((x - mean_r) ** 2 for x in daily_returns) / len(daily_returns)
+    ann_vol = variance ** 0.5 * (252 ** 0.5)
+    return (ret_1y, ann_vol)
+
+
+def score_performance(navs: list[float], benchmark: list[float] | None = None) -> int:
     """Score multi-period returns (0–25). Recent periods weighted higher.
 
-    1m:3pts 3m:5pts 6m:5pts 1y:7pts 3y:5pts. Positive → full; zero → half.
+    1m:3pts 3m:5pts 6m:5pts 1y:7pts. Positive → full; slightly negative → half.
+    When benchmark NAV history is provided, scores excess return instead:
+      excess > +2%: full points
+      excess > 0:   80% points
+      excess > -2%: 50% points
+      excess > -5%: 25% points
+      excess <= -5%: 0 points
     """
     if len(navs) < 22:
         return 0
@@ -145,6 +177,24 @@ def score_performance(navs: list[float]) -> int:
         if start_nav <= 0:
             continue
         ret = (end_nav / start_nav - 1)
+
+        # ── Benchmark-relative scoring ──────────────────────────────
+        if benchmark and len(benchmark) > days:
+            b_start = benchmark[-days - 1] if len(benchmark) > days else benchmark[0]
+            b_end = benchmark[-1]
+            if b_start > 0:
+                excess = ret - (b_end / b_start - 1)
+                if excess > 0.02:
+                    score += pts
+                elif excess > 0:
+                    score += int(pts * 0.8)
+                elif excess > -0.02:
+                    score += pts // 2
+                elif excess > -0.05:
+                    score += int(pts * 0.25)
+                continue
+
+        # ── Absolute fallback (no benchmark or insufficient data) ────
         if ret > 0:
             score += pts
         elif ret > -0.05:
@@ -156,13 +206,11 @@ def score_performance(navs: list[float]) -> int:
 def score_risk_control(navs: list[float]) -> int:
     """Score risk control (0–20). Lower drawdown + lower volatility = higher.
 
-    Accepts float or Decimal NAVs — converts to float internally to avoid
-    Decimal ** float TypeError from the API data layer.
+    Uses _compute_metrics for shared volatility/drawdown computation.
     """
     if len(navs) < 63:
         return 0
 
-    # Convert to float (API returns Decimal, math needs float ** float)
     prices = [float(v) for v in navs]
 
     # Max drawdown penalty (0–10)
@@ -185,18 +233,12 @@ def score_risk_control(navs: list[float]) -> int:
     elif max_dd < -0.05:
         dd_score = 8
 
-    # Volatility penalty (0–10)
-    daily_returns = [
-        prices[i] / prices[i - 1] - 1
-        for i in range(1, len(prices))
-        if prices[i - 1] > 0
-    ]
-    if len(daily_returns) < 10:
+    # Volatility penalty (0–10) — uses shared helper
+    metrics = _compute_metrics(navs)
+    if metrics is None:
         return dd_score
 
-    mean_r = sum(daily_returns) / len(daily_returns)
-    variance = sum((r - mean_r) ** 2 for r in daily_returns) / len(daily_returns)
-    ann_vol = variance ** 0.5 * (252 ** 0.5)
+    ann_vol = metrics[1]
 
     vol_score = 10
     if ann_vol > 0.40:
@@ -269,6 +311,64 @@ def score_manager(manager) -> int:
         score = max(0, score - 1)
 
     return min(5, score)
+
+
+def apply_risk_personalization(
+    results: list,
+    nav_data: dict[str, list[float]],
+    risk_level: str,
+) -> list:
+    """Apply risk-level adjustments to screening scores.
+
+    conservative: penalize volatile funds (>15% ann_vol → -10, >8% → -5),
+                  reward very stable ones (<3% → +3).
+    aggressive: reward high return funds (>10% 1y → +5),
+                penalize too-safe (<1% 1y → -3).
+    moderate: no adjustment.
+
+    ScreenResult is frozen, so we rebuild results with adjusted scores.
+    """
+    if risk_level not in ("conservative", "aggressive"):
+        return results
+
+    adj: dict[str, int] = {}
+    for r in results:
+        nv = nav_data.get(r.fund.code, [])
+        metrics = _compute_metrics(nv)
+        if metrics is None:
+            continue
+        ret_1y, ann_vol = metrics
+
+        delta = 0
+        if risk_level == "conservative":
+            if ann_vol > 0.15:
+                delta = -10
+            elif ann_vol > 0.08:
+                delta = -5
+            elif ann_vol < 0.03:
+                delta = 3
+        elif risk_level == "aggressive":
+            if ret_1y > 0.10:
+                delta = 5
+            elif ret_1y < 0.01 and ret_1y >= 0:
+                delta = -3
+
+        if delta != 0:
+            adj[r.fund.code] = delta
+
+    if not adj:
+        return results
+
+    adjusted = [
+        ScreenResult(
+            fund=r.fund,
+            score=max(0, min(100, r.score + adj.get(r.fund.code, 0))),
+            warnings=r.warnings,
+        )
+        for r in results
+    ]
+    adjusted.sort(key=lambda r: r.score, reverse=True)
+    return adjusted
 
 
 # ── Bulk Screening (uses pre-computed returns from fund pool) ──────

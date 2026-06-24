@@ -17,6 +17,7 @@ class PoolFund:
     code: str
     name: str
     fund_type: str  # from 济安金信 classification
+    raw_type: str   # original akshare type (e.g. "债券型-长债", "混合型-灵活")
     manager: str
     fee: Decimal
     # Pre-computed returns (percentage points, e.g. 15.5 means +15.5%)
@@ -75,6 +76,7 @@ def fetch_fund_pool(
             code = str(row["基金代码"]).zfill(6)
             name = str(row.get("基金简称", code))
             fund_type = _classify_type(str(row.get("类型", "混合型-灵活")))
+            raw_type = str(row.get("类型", "混合型-灵活"))
             manager = str(row.get("基金经理", "未知"))
             fee_str = str(row.get("手续费", "0.015")).replace("%", "")
             fee = Decimal(fee_str) / Decimal("100") if fee_str else Decimal("0.015")
@@ -98,6 +100,7 @@ def fetch_fund_pool(
                 code=code,
                 name=name,
                 fund_type=fund_type,
+                raw_type=raw_type,
                 manager=manager,
                 fee=fee,
                 ret_1m=_safe_float(row.get("近1月", 0)),

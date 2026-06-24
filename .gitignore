@@ -15,3 +15,5 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 .codebuddy/
+data/market_cache.db-shm
+data/market_cache.db-wal
