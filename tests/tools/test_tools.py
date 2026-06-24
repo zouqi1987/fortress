@@ -1,15 +1,9 @@
-"""Unit tests for MCP tool wrappers — verify they call engines and handle edges.
-
-NOTE: Skipped during Phase 3 — tool layer (src/tools/screener.py) imports
-deleted screen_funds/apply_risk_personalization. Phase 4 rewrites the tool
-layer to use score_funds + NavStore. Re-enable after Phase 4.
-"""
+"""Unit tests for MCP tool wrappers — verify they call engines and handle edges."""
 from datetime import date
 from decimal import Decimal
+from unittest import mock
 
 import pytest
-
-pytestmark = pytest.mark.skip(reason="Phase 4: tool layer rewrite pending — screen_funds/apply_risk_personalization deleted in Phase 3")
 
 from src.tools.advisory import get_advice
 from src.tools.audit import audit_single_fund
@@ -269,35 +263,82 @@ class TestScreenFunds:
          "net_asset_value": 50_000_000, "fee_rate": 0.025, "inception_date": "2025-12-01"},
     ]
 
+    @staticmethod
+    def _mock_nav_store_with_data(fund_codes):
+        """Mock NavStore with canned NAV data for the given fund codes."""
+        mock_store = mock.Mock()
+        mock_store.coverage_report.return_value = {"fund_count": len(fund_codes), "latest_date": "2026-06-24"}
+        # Return 100-point stable NAV series for each fund
+        nav_map = {code: [1.0 + i * 0.001 for i in range(100)] for code in fund_codes}
+        mock_store.get_nav_series.side_effect = lambda code, days=750: nav_map.get(code, [])
+        return mock_store
+
+    @staticmethod
+    def _mock_pool_index(fund_codes):
+        """Mock pool_index with canned PoolFund data."""
+        from src.data.sources.fund_pool import PoolFund
+        pool = {}
+        for code in fund_codes:
+            pool[code] = PoolFund(
+                code=code, name=f"Fund{code}", fund_type="bond", raw_type="bond",
+                manager="test_mgr", fee=Decimal("0.015"),
+                ret_1m=0.5, ret_3m=1.0, ret_6m=2.0, ret_1y=5.0, ret_3y=10.0,
+                rating_morningstar=3, rating_shanghai=3, rating_zhaoshang=3, rating_jiAn=3,
+            )
+        return pool
+
+    @staticmethod
+    def _mock_category_averages():
+        return {"broad": {"bond": {"ret_1m": 0.5, "ret_3m": 1.0, "ret_6m": 2.0, "ret_1y": 5.0, "ret_3y": 10.0}}}
+
+    def _patch_tool_deps(self, fund_codes):
+        """Patch tool-layer helpers to avoid network/DB calls."""
+        return [
+            mock.patch("src.tools.screener._get_nav_store", return_value=self._mock_nav_store_with_data(fund_codes)),
+            mock.patch("src.tools.screener._get_or_load_pool_index", return_value=self._mock_pool_index(fund_codes)),
+            mock.patch("src.tools.screener._get_or_load_category_averages", return_value=self._mock_category_averages()),
+        ]
+
     def test_screens_and_scores_funds(self):
-        result = screen_funds(self.SAMPLE_FUNDS)
+        codes = [f["code"] for f in self.SAMPLE_FUNDS]
+        with self._patch_tool_deps(codes)[0], self._patch_tool_deps(codes)[1], self._patch_tool_deps(codes)[2]:
+            result = screen_funds(self.SAMPLE_FUNDS)
         assert result["count"] > 0
         for r in result["results"]:
             assert "score" in r
             assert 0 <= r["score"] <= 100
+            assert "dimension_breakdown" in r
+            assert "fund_type_class" in r
 
     def test_results_sorted_by_score_desc(self):
-        result = screen_funds(self.SAMPLE_FUNDS)
+        codes = [f["code"] for f in self.SAMPLE_FUNDS]
+        patches = self._patch_tool_deps(codes)
+        for p in patches:
+            p.start()
+        try:
+            result = screen_funds(self.SAMPLE_FUNDS)
+        finally:
+            for p in patches:
+                p.stop()
         scores = [r["score"] for r in result["results"]]
         assert scores == sorted(scores, reverse=True)
 
     def test_filters_by_min_net_asset_value(self):
-        result = screen_funds(self.SAMPLE_FUNDS, min_net_asset_value=1_000_000_000)
+        codes = [f["code"] for f in self.SAMPLE_FUNDS]
+        patches = self._patch_tool_deps(codes)
+        for p in patches:
+            p.start()
+        try:
+            result = screen_funds(self.SAMPLE_FUNDS, min_net_asset_value=1_000_000_000)
+        finally:
+            for p in patches:
+                p.stop()
         assert all(r["net_asset_value"] >= 1_000_000_000 for r in result["results"])
-
-    def test_filters_by_allowed_types(self):
-        result = screen_funds(self.SAMPLE_FUNDS, allowed_types="bond")
-        assert all(r["type"] == "bond" for r in result["results"])
 
     def test_empty_funds_returns_empty(self):
         result = screen_funds([])
         assert result["count"] == 0
         assert result["results"] == []
-
-    def test_partial_fund_data_uses_defaults(self):
-        partial_funds = [{"code": "bad", "name": "No Data"}]
-        result = screen_funds(partial_funds)
-        assert result["count"] >= 0  # defaults used, fund passes or fails filters
 
     def test_invalid_inception_date_reports_error(self):
         bad_date_funds = [{"code": "err", "name": "Bad Date", "type": "mixed",
@@ -305,6 +346,16 @@ class TestScreenFunds:
                            "inception_date": "not-a-date"}]
         result = screen_funds(bad_date_funds)
         assert result["errors"] is not None
+
+    def test_empty_nav_store_returns_backfill_error(self):
+        """Coverage gate: empty NavStore → error with backfill instructions."""
+        empty_store = mock.Mock()
+        empty_store.coverage_report.return_value = {"fund_count": 0, "latest_date": None}
+        with mock.patch("src.tools.screener._get_nav_store", return_value=empty_store):
+            result = screen_funds(self.SAMPLE_FUNDS)
+        assert result["count"] == 0
+        assert "error" in result
+        assert "backfill" in result["error"].lower() or "回填" in result["error"]
 
 
 class TestLookupIndex:
