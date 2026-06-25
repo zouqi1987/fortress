@@ -39,6 +39,17 @@ class ScreenResult:
     dimension_breakdown: dict[str, int] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class LightResult:
+    """Stage 1 result — 3-dim score, no NavStore dependency."""
+
+    code: str
+    name: str
+    fund_type: str
+    score: int  # 0–100, weighted by renormalized Stage 1 weights
+    dimension_breakdown: dict[str, int] = field(default_factory=dict)
+
+
 # ── Unified scoring (score_funds) ─────────────────────────────────────
 
 
@@ -154,6 +165,94 @@ def score_funds(
         results.append(ScreenResult(
             fund=fund, score=score, warnings=tuple(warnings),
             dimension_breakdown=dimensions,
+        ))
+
+    results.sort(key=lambda r: r.score, reverse=True)
+    return results
+
+
+def score_funds_light(
+    pool: list["PoolFund"],
+    config: ScreenConfig,
+    category_averages: dict[str, dict[str, float]],
+    risk_level: str = "moderate",
+) -> list[LightResult]:
+    """Stage 1 scoring — 3 NavStore-free dims (consensus/peer/fee).
+
+    Scores every PoolFund in the pool on institutional_consensus,
+    peer_performance, and fee using renormalized weights. No NavStore
+    lookup — safe to call on the full 19,747-fund market pool.
+
+    Exclusion rules (same as score_funds):
+      - Fund type not in config.allowed_types → skip
+      - fee > config.max_fee_rate → skip
+      - No category averages for fund type → skip
+      - All 4 agency ratings = 0 → skip (InsufficientDataError)
+      - No returns → skip (InsufficientDataError)
+
+    Args:
+        pool: List of PoolFund (full market or filtered subset).
+        config: Screening filters (uses allowed_types + max_fee_rate only;
+                min_net_asset_value and min_inception_date are NOT applied
+                here — PoolFund lacks those fields. Apply in Stage 2.).
+        category_averages: {fund_type: {period: avg_return}}.
+        risk_level: "conservative" | "moderate" | "aggressive".
+
+    Returns:
+        LightResult list sorted by score descending.
+    """
+    from src.engine.risk_personalization import get_weights_light
+    from src.engine.institutional_consensus import score_institutional_consensus
+    from src.engine.peer_scoring import score_peer_performance
+
+    results: list[LightResult] = []
+
+    for pf in pool:
+        # ── Hard filters (type + fee only — PoolFund has no NAV/inception) ──
+        if pf.fund_type not in config.allowed_types:
+            continue
+        if Decimal(str(pf.fee)) > config.max_fee_rate:
+            continue
+
+        fund_class = classify_fund_type(pf.fund_type)
+        weights = get_weights_light(fund_class, risk_level)
+        dimensions: dict[str, int] = {}
+
+        # ── Dimension 1: Institutional consensus ─────────────────────
+        try:
+            ratings = {
+                "morningstar": pf.rating_morningstar,
+                "shanghai": pf.rating_shanghai,
+                "zhaoshang": pf.rating_zhaoshang,
+                "jiAn": pf.rating_jiAn,
+            }
+            dimensions["institutional_consensus"] = score_institutional_consensus(ratings)
+        except InsufficientDataError:
+            continue  # excluded — no ratings
+
+        # ── Dimension 2: Peer performance ────────────────────────────
+        fund_returns = {
+            "ret_1m": pf.ret_1m, "ret_3m": pf.ret_3m, "ret_6m": pf.ret_6m,
+            "ret_1y": pf.ret_1y, "ret_3y": pf.ret_3y,
+        }
+        cat_key = pf.raw_type or pf.fund_type
+        cat_avg = category_averages.get(cat_key, category_averages.get(pf.fund_type, {}))
+        if not cat_avg:
+            continue  # excluded — no category averages
+        try:
+            dimensions["peer_performance"] = score_peer_performance(fund_returns, cat_avg)
+        except InsufficientDataError:
+            continue  # excluded — no returns
+
+        # ── Dimension 3: Fee ──────────────────────────────────────────
+        dimensions["fee"] = _score_fee(Decimal(str(pf.fee)))
+
+        # ── Weighted Stage 1 score ──────────────────────────────────
+        score = int(sum(dimensions[d] * weights[d] for d in weights))
+
+        results.append(LightResult(
+            code=pf.code, name=pf.name, fund_type=pf.fund_type,
+            score=score, dimension_breakdown=dimensions,
         ))
 
     results.sort(key=lambda r: r.score, reverse=True)
