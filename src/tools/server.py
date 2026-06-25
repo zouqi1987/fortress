@@ -557,5 +557,44 @@ def export_report(
 
 # ── Entry Point ──────────────────────────────────────────────────────
 
+
+def _startup_data_check():
+    """Check NAV data completeness on startup. Auto-backfill if incomplete.
+
+    Finance principle: any data gap could cause wrong investment decisions.
+    Checks latest NAV date vs latest trading date; if gap exists, triggers
+    update() which auto-backfills as needed.
+    """
+    import os
+    import sys
+    from src.data.sources.nav_store import NavStore
+
+    db_path = os.path.join(
+        os.environ.get("FORTRESS_DATA_DIR", "data"),
+        "market_cache.db",
+    )
+    try:
+        store = NavStore(db_path)
+        report = store.update()
+        store.close()
+
+        if report.action == "current":
+            print(f"[startup] NAV data up to date ({report.latest_db_date})",
+                  file=sys.stderr)
+        elif report.action == "bulk_update":
+            print(f"[startup] NAV data updated: +{report.points_added} points "
+                  f"(gap={report.gap_days}d)", file=sys.stderr)
+        elif report.action == "recovery_mode":
+            print(f"[startup] NAV data in recovery mode (gap={report.gap_days}d), "
+                  f"lazy per-fund fetch enabled", file=sys.stderr)
+        elif report.action == "auto_backfill_completed":
+            print(f"[startup] NAV auto-backfill completed: "
+                  f"{report.funds_updated} funds, {report.points_added} points "
+                  f"(gap was {report.gap_days}d)", file=sys.stderr)
+    except Exception as e:
+        print(f"[startup] NAV data check failed: {e}", file=sys.stderr)
+
+
 if __name__ == "__main__":
+    _startup_data_check()
     server.run()

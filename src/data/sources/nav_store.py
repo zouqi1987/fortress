@@ -352,13 +352,20 @@ class NavStore:
         latest_trading_date = past_trading_dates[-1] if past_trading_dates else ""
 
         if latest_db_date is None:
+            # Empty store: auto-trigger full backfill
+            print("NavStore is empty, auto-triggering full backfill...",
+                  flush=True)
+
+            all_codes = self._get_all_fund_codes()
+            bf_report = self.backfill(all_codes, period="3年", max_workers=5)
+
             return UpdateReport(
                 latest_db_date=None,
                 latest_trading_date=latest_trading_date,
                 gap_days=999,
-                action="manual_backfill_needed",
-                funds_updated=0,
-                points_added=0,
+                action="auto_backfill_completed",
+                funds_updated=bf_report.fetched,
+                points_added=bf_report.point_count,
             )
 
         # Count trading dates after latest_db_date (past dates only)
@@ -406,15 +413,31 @@ class NavStore:
                 points_added=0,
             )
 
-        # gap > 30: defer to manual backfill
+        # gap > 30: auto-trigger full backfill to recover missing history
+        print(f"Gap={gap_days} days (>30), auto-triggering full backfill...",
+              flush=True)
+
+        all_codes = self._get_all_fund_codes()
+        bf_report = self.backfill(all_codes, period="3年", max_workers=5)
+
         return UpdateReport(
             latest_db_date=latest_db_date,
             latest_trading_date=latest_trading_date,
             gap_days=gap_days,
-            action="manual_backfill_needed",
-            funds_updated=0,
-            points_added=0,
+            action="auto_backfill_completed",
+            funds_updated=bf_report.fetched,
+            points_added=bf_report.point_count,
         )
+
+    @staticmethod
+    def _get_all_fund_codes() -> list[str]:
+        """Get ALL fund codes from rank + daily endpoints (union)."""
+        import akshare as ak
+        df_rank = ak.fund_open_fund_rank_em(symbol="全部")
+        df_daily = ak.fund_open_fund_daily_em()
+        rank_codes = {str(c).zfill(6) for c in df_rank["基金代码"]}
+        daily_codes = {str(c).zfill(6) for c in df_daily["基金代码"]}
+        return sorted(rank_codes | daily_codes)
 
     def _get_trading_dates(self) -> list[str]:
         """Fetch and cache the trading date calendar from akshare.
@@ -522,12 +545,7 @@ def _main():
     if args.backfill:
         # Get ALL fund codes from both rank + daily endpoints (union, no filtering)
         print("Fetching all fund codes (rank + daily endpoints)...", flush=True)
-        import akshare as ak
-        df_rank = ak.fund_open_fund_rank_em(symbol="全部")
-        df_daily = ak.fund_open_fund_daily_em()
-        rank_codes = {str(c).zfill(6) for c in df_rank["基金代码"]}
-        daily_codes = {str(c).zfill(6) for c in df_daily["基金代码"]}
-        codes = sorted(rank_codes | daily_codes)
+        codes = NavStore._get_all_fund_codes()
         print(f"Backfilling {len(codes)} funds (period={args.period}, "
               f"workers={args.max_workers})...", flush=True)
 
