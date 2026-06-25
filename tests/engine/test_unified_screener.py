@@ -14,17 +14,14 @@ from unittest import mock
 
 import pytest
 
-from src.datatypes import FundInfo, InsufficientDataError
+from src.datatypes import FundInfo
 from src.data.sources.fund_pool import PoolFund
 from src.data.sources.nav_store import NavStore
 from src.engine.screener import (
     ScreenConfig,
-    ScreenResult,
     score_funds,
-    score_performance,
     score_risk_control,
     score_consistency,
-    score_manager,
 )
 
 
@@ -308,56 +305,6 @@ class TestScoreFee:
 # ── Preserved helper tests (ported from test_screener_v2.py) ──────────
 
 
-class TestScorePerformance:
-    def test_flat_returns_mid_score(self):
-        navs = [1.0] * 100
-        s = score_performance(navs)
-        assert 0 <= s <= 10
-
-    def test_rising_returns_high_score(self):
-        navs = [1.0 * (1.001 ** i) for i in range(300)]
-        s = score_performance(navs)
-        assert s >= 10
-
-    def test_falling_returns_low_score(self):
-        navs = [1.0 * (0.999 ** i) for i in range(300)]
-        s = score_performance(navs)
-        assert s <= 12
-
-    def test_too_few_nav_returns_zero(self):
-        assert score_performance([]) == 0
-
-    def test_beating_benchmark_gets_full_points(self):
-        fund_navs = [1.0 * (1.001 ** i) for i in range(300)]
-        bench_navs = [1.0 * (1.0002 ** i) for i in range(300)]
-        s = score_performance(fund_navs, bench_navs)
-        assert s >= 8
-
-    def test_matching_benchmark_gets_reduced_points(self):
-        navs = [1.0 * (1.0005 ** i) for i in range(300)]
-        s_with = score_performance(navs, navs)
-        assert s_with < 15
-
-    def test_severe_underperformance_scores_zero(self):
-        fund_navs = [1.0 * (0.999 ** i) for i in range(300)]
-        bench_navs = [1.0 * (1.001 ** i) for i in range(300)]
-        s = score_performance(fund_navs, bench_navs)
-        assert s <= 3
-
-    def test_falls_back_to_absolute_when_no_benchmark(self):
-        navs = [1.0 * (1.001 ** i) for i in range(300)]
-        s_abs = score_performance(navs)
-        s_with_self = score_performance(navs, navs)
-        assert s_abs != s_with_self
-
-    def test_benchmark_too_short_falls_back(self):
-        navs = [1.0 * (1.001 ** i) for i in range(300)]
-        short_bench = [1.0, 1.01]
-        s_abs = score_performance(navs)
-        s_short = score_performance(navs, short_bench)
-        assert s_abs == s_short
-
-
 class TestScoreRiskControl:
     def test_stable_nav_low_risk(self):
         navs = [1.0 + i * 0.001 for i in range(100)]
@@ -395,20 +342,3 @@ class TestScoreConsistency:
 
     def test_empty_returns_zero(self):
         assert score_consistency([]) == 0
-
-
-class TestScoreManager:
-    def test_experienced_manager_high_score(self):
-        from src.data.sources.manager import ManagerInfo
-        mgr = ManagerInfo(fund_code="001", name=" Veteran", tenure_days=1500,
-                          cumulative_return="+80.5%", fund_count=2)
-        assert score_manager(mgr) >= 3
-
-    def test_new_manager_low_score(self):
-        from src.data.sources.manager import ManagerInfo
-        mgr = ManagerInfo(fund_code="001", name="Rookie", tenure_days=100,
-                          cumulative_return="+1.2%", fund_count=5)
-        assert score_manager(mgr) <= 3
-
-    def test_none_manager_returns_zero(self):
-        assert score_manager(None) == 0

@@ -36,18 +36,21 @@ class PoolFund:
 def fetch_fund_pool(
     min_ret_1y: float = -50.0,
     allowed_types: set[str] | None = None,
+    skip_filters: bool = False,
 ) -> list[PoolFund]:
     """Fetch and merge the full Chinese mutual fund pool.
 
     Args:
         min_ret_1y: Minimum 1-year return (filters out extreme losers).
         allowed_types: Fund types to include. None = all.
+        skip_filters: If True, skip ALL filtering (duplicate shares, equity-only
+                      index, min_ret_1y, allowed_types). Returns every fund in
+                      the rank endpoint. Use for "大而全" complete dataset.
 
     Returns:
         List of PoolFund objects sorted by 1y return descending.
     """
     import akshare as ak
-    import pandas as pd
 
     # ── Fetch fund rankings (returns + basic info) ──────────────────
     df_rank = ak.fund_open_fund_rank_em(symbol="全部")
@@ -82,19 +85,18 @@ def fetch_fund_pool(
             fee = Decimal(fee_str) / Decimal("100") if fee_str else Decimal("0.015")
 
             ret_1y = _safe_float(row.get("近1年", 0))
-            if ret_1y < min_ret_1y:
-                continue
 
-            if allowed_types and fund_type not in allowed_types:
-                continue
-
-            # Skip C/E/D/B share classes only when A/base equivalent exists
-            if _is_duplicate_share(name, all_names):
-                continue
-
-            # For index funds, only keep equity indexes
-            if fund_type == "index" and not _is_equity_index(name):
-                continue
+            if not skip_filters:
+                if ret_1y < min_ret_1y:
+                    continue
+                if allowed_types and fund_type not in allowed_types:
+                    continue
+                # Skip C/E/D/B share classes only when A/base equivalent exists
+                if _is_duplicate_share(name, all_names):
+                    continue
+                # For index funds, only keep equity indexes
+                if fund_type == "index" and not _is_equity_index(name):
+                    continue
 
             funds.append(PoolFund(
                 code=code,

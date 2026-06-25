@@ -3,7 +3,7 @@
 [![Test](https://github.com/zouqi1987/fortress/actions/workflows/test.yml/badge.svg)](https://github.com/zouqi1987/fortress/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/zouqi1987/fortress/blob/main/LICENSE)
 
-对话式 AI 投资顾问 **Claude Code Skill**。3 个命名 Agent + 15 个 MCP 工具：
+对话式 AI 投资顾问 **Claude Code Skill**。3 个命名 Agent + 16 个 MCP 工具：
 - **底仓配置**（求确定性）：风险测评 → 三层架构 → 产品筛选 → 压���测试
 - **机会捕捉**（求收益）：市场异动 → 多空信号 → 调仓建议
 - **持仓诊断**（求安心）：拉取持仓 → 层级偏离 → 单品审计 → 健康评分
@@ -30,7 +30,7 @@ pip install -e ".[dev]"
 
 ### 2. Claude Code 自动发现
 
-Claude Code 启动时自动加载项目根目录的 `.mcp.json`，注册 15 个 MCP 工具（3 个 Agent + 12 个支持工具）。无需额外配置。
+Claude Code 启动时自动加载项目根目录的 `.mcp.json`，注册 16 个 MCP 工具（3 个 Agent + 13 个支持工具）。无需额外配置。
 
 验证工具已注册：
 ```

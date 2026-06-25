@@ -2,7 +2,7 @@
 
 Zero I/O. Takes risk level + total principal, returns structured allocation plan.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 from src.engine.risk_profile import RiskLevel

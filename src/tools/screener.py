@@ -38,7 +38,7 @@ def _get_or_load_pool_index() -> dict[str, object]:
         return _pool_index
     try:
         from src.data.sources.fund_pool import fetch_fund_pool
-        pool = fetch_fund_pool()
+        pool = fetch_fund_pool(skip_filters=True)  # 大而全 — no filtering
         _pool_index = {f.code: f for f in pool}
     except Exception:
         _pool_index = {}

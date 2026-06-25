@@ -8,7 +8,6 @@ from __future__ import annotations
 import sqlite3
 from datetime import date
 from decimal import Decimal
-from typing import Generator
 
 from src.engine.ledger import (
     Account,

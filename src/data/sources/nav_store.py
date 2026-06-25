@@ -520,16 +520,19 @@ def _main():
         return
 
     if args.backfill:
-        # Fetch fund pool to get all codes
-        print("Fetching fund pool...", flush=True)
-        from src.data.sources.fund_pool import fetch_fund_pool
-        pool = fetch_fund_pool()
-        codes = [f.code for f in pool]
+        # Get ALL fund codes from both rank + daily endpoints (union, no filtering)
+        print("Fetching all fund codes (rank + daily endpoints)...", flush=True)
+        import akshare as ak
+        df_rank = ak.fund_open_fund_rank_em(symbol="全部")
+        df_daily = ak.fund_open_fund_daily_em()
+        rank_codes = {str(c).zfill(6) for c in df_rank["基金代码"]}
+        daily_codes = {str(c).zfill(6) for c in df_daily["基金代码"]}
+        codes = sorted(rank_codes | daily_codes)
         print(f"Backfilling {len(codes)} funds (period={args.period}, "
               f"workers={args.max_workers})...", flush=True)
 
         report = store.backfill(codes, period=args.period, max_workers=args.max_workers)
-        print(f"\nBackfill complete:")
+        print("\nBackfill complete:")
         print(f"  Fetched:     {report.fetched}")
         print(f"  Skipped:     {report.skipped}")
         print(f"  Failed:      {report.failed}")
@@ -539,7 +542,7 @@ def _main():
 
         # Print final stats
         stats = store.stats()
-        print(f"\nStore stats:")
+        print("\nStore stats:")
         print(f"  Fund count:   {stats['fund_count']}")
         print(f"  Total points: {stats['total_points']}")
         print(f"  Date range:   {stats['date_range']}")
