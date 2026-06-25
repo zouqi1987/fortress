@@ -520,11 +520,14 @@ def _main():
         return
 
     if args.backfill:
-        # Fetch fund pool to get all codes
-        print("Fetching fund pool...", flush=True)
-        from src.data.sources.fund_pool import fetch_fund_pool
-        pool = fetch_fund_pool()
-        codes = [f.code for f in pool]
+        # Get ALL fund codes from both rank + daily endpoints (union, no filtering)
+        print("Fetching all fund codes (rank + daily endpoints)...", flush=True)
+        import akshare as ak
+        df_rank = ak.fund_open_fund_rank_em(symbol="全部")
+        df_daily = ak.fund_open_fund_daily_em()
+        rank_codes = {str(c).zfill(6) for c in df_rank["基金代码"]}
+        daily_codes = {str(c).zfill(6) for c in df_daily["基金代码"]}
+        codes = sorted(rank_codes | daily_codes)
         print(f"Backfilling {len(codes)} funds (period={args.period}, "
               f"workers={args.max_workers})...", flush=True)
 
