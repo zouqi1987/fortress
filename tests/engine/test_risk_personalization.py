@@ -21,6 +21,7 @@ from src.engine.risk_personalization import (
     WEIGHTS,
     classify_fund_type,
     get_weights,
+    get_weights_light,
 )
 
 
@@ -195,3 +196,37 @@ class TestGetWeights:
         """
         w = get_weights("active", "conservative")
         assert w is WEIGHTS["active"]["conservative"]
+
+
+class TestGetWeightsLight:
+    def test_active_conservative_renormalized(self):
+        w = get_weights_light("active", "conservative")
+        assert set(w.keys()) == {"institutional_consensus", "peer_performance", "fee"}
+        assert abs(sum(w.values()) - 1.0) < 1e-9
+        # 0.25/0.55, 0.10/0.55, 0.20/0.55
+        assert abs(w["institutional_consensus"] - 0.4545) < 0.001
+        assert abs(w["peer_performance"] - 0.1818) < 0.001
+        assert abs(w["fee"] - 0.3636) < 0.001
+
+    def test_money_unchanged(self):
+        """Money funds already 3-dim — Stage 1 weights == full weights."""
+        full = get_weights("money", "conservative")
+        light = get_weights_light("money", "conservative")
+        assert set(light.keys()) == set(full.keys())
+        for k in full:
+            assert abs(light[k] - full[k]) < 1e-9
+
+    def test_passive_aggressive_fee_dominant(self):
+        w = get_weights_light("passive", "aggressive")
+        assert w["fee"] > 0.50  # fee should dominate
+        assert abs(sum(w.values()) - 1.0) < 1e-9
+
+    def test_invalid_class_raises(self):
+        with pytest.raises(ValueError, match="未知基金类型类"):
+            get_weights_light("hedge_fund", "conservative")
+
+    def test_all_9_combinations_sum_to_one(self):
+        for cls in ("active", "passive", "money"):
+            for risk in ("conservative", "moderate", "aggressive"):
+                w = get_weights_light(cls, risk)
+                assert abs(sum(w.values()) - 1.0) < 1e-9, f"{cls}/{risk} doesn't sum to 1"

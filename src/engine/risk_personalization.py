@@ -158,3 +158,35 @@ def get_weights(fund_type_class: str, risk_level: str) -> dict[str, float]:
     if risk_level not in _VALID_RISK_LEVELS:
         raise ValueError(f"未知风险等级: {risk_level!r}")
     return WEIGHTS[fund_type_class][risk_level]
+
+
+_STAGE1_DIMS = ("institutional_consensus", "peer_performance", "fee")
+
+
+def get_weights_light(fund_type_class: str, risk_level: str) -> dict[str, float]:
+    """Stage 1 weights — 3 NavStore-free dims, renormalized to sum 1.0.
+
+    For money funds: identical to get_weights (already 3-dim, no loss).
+    For active/passive: drops risk_control + persistence, renormalizes
+    the remaining 3 dims (consensus/peer/fee) to sum to 1.0.
+
+    Used by score_funds_light to pre-rank the full pool without NavStore.
+
+    Args:
+        fund_type_class: "active", "passive", or "money".
+        risk_level:      "conservative", "moderate", or "aggressive".
+
+    Returns:
+        Dict of 3 dimension weights summing to 1.0.
+
+    Raises:
+        ValueError: If fund_type_class or risk_level is invalid.
+    """
+    full = get_weights(fund_type_class, risk_level)  # raises ValueError if invalid
+    available = {k: v for k, v in full.items() if k in _STAGE1_DIMS}
+    total = sum(available.values())
+    if total == 0:
+        raise ValueError(
+            f"Stage 1 dimensions all zero for {fund_type_class}/{risk_level}"
+        )
+    return {k: v / total for k, v in available.items()}
