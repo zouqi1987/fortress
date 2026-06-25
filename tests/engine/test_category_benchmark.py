@@ -87,3 +87,31 @@ class TestComputeCategoryAverages:
         # Broad: all merged into "bond"
         assert "bond" in broad
         assert broad["bond"]["ret_1y"] == pytest.approx(5.333, rel=1e-2)
+
+    def test_nan_returns_filtered_from_average(self):
+        """NaN return values are filtered, not included in average.
+
+        Regression: akshare returns NaN for some funds/periods. Previously
+        produced NaN average; now filters to valid values only.
+        """
+        import math
+        funds = [
+            _make_pool_fund("001", "A", "bond", ret_1y=2.0),
+            _make_pool_fund("002", "B", "bond", ret_1y=4.0),
+            _make_pool_fund("003", "C", "bond", ret_1y=float("nan")),
+        ]
+        result = compute_category_averages(funds)
+        # NaN filtered → avg(2, 4) = 3.0, not NaN
+        assert result["bond"]["ret_1y"] == pytest.approx(3.0)
+        assert not math.isnan(result["bond"]["ret_1y"])
+
+    def test_all_nan_returns_zero_not_nan(self):
+        """All values NaN for a period → 0.0, not NaN."""
+        import math
+        funds = [
+            _make_pool_fund("001", "A", "bond", ret_1y=float("nan")),
+            _make_pool_fund("002", "B", "bond", ret_1y=float("nan")),
+        ]
+        result = compute_category_averages(funds)
+        assert result["bond"]["ret_1y"] == 0.0
+        assert not math.isnan(result["bond"]["ret_1y"])
