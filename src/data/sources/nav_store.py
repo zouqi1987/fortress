@@ -11,7 +11,7 @@ Historical NAV points are immutable once stored (INSERT OR IGNORE).
 """
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 
@@ -345,7 +345,11 @@ class NavStore:
         """
         latest_db_date = self.get_latest_date()
         trading_dates = self._get_trading_dates()
-        latest_trading_date = trading_dates[-1] if trading_dates else ""
+        # Filter to past dates only — tool_trade_date_hist_sina returns full-year
+        # calendar including future dates up to Dec 31
+        today_str = date.today().isoformat()
+        past_trading_dates = [d for d in trading_dates if d <= today_str]
+        latest_trading_date = past_trading_dates[-1] if past_trading_dates else ""
 
         if latest_db_date is None:
             return UpdateReport(
@@ -357,8 +361,8 @@ class NavStore:
                 points_added=0,
             )
 
-        # Count trading dates after latest_db_date
-        gap_dates = [d for d in trading_dates if d > latest_db_date]
+        # Count trading dates after latest_db_date (past dates only)
+        gap_dates = [d for d in past_trading_dates if d > latest_db_date]
         gap_days = len(gap_dates)
 
         if gap_days <= 0:
@@ -441,7 +445,7 @@ class NavStore:
             if col.endswith("-单位净值"):
                 date_str = col.replace("-单位净值", "")
                 for code, nav in zip(df["基金代码"], df[col]):
-                    if nav is not None and str(nav) != "nan":
+                    if nav is not None and str(nav) not in ("nan", "", "None"):
                         rows.append((str(code).zfill(6), date_str, float(nav)))
         return rows
 
