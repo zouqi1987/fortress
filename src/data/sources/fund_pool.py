@@ -51,7 +51,6 @@ def fetch_fund_pool(
         List of PoolFund objects sorted by 1y return descending.
     """
     import akshare as ak
-    import pandas as pd
 
     # ── Fetch fund rankings (returns + basic info) ──────────────────
     df_rank = ak.fund_open_fund_rank_em(symbol="全部")

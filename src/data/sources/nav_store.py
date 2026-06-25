@@ -532,7 +532,7 @@ def _main():
               f"workers={args.max_workers})...", flush=True)
 
         report = store.backfill(codes, period=args.period, max_workers=args.max_workers)
-        print(f"\nBackfill complete:")
+        print("\nBackfill complete:")
         print(f"  Fetched:     {report.fetched}")
         print(f"  Skipped:     {report.skipped}")
         print(f"  Failed:      {report.failed}")
@@ -542,7 +542,7 @@ def _main():
 
         # Print final stats
         stats = store.stats()
-        print(f"\nStore stats:")
+        print("\nStore stats:")
         print(f"  Fund count:   {stats['fund_count']}")
         print(f"  Total points: {stats['total_points']}")
         print(f"  Date range:   {stats['date_range']}")

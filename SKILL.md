@@ -1,6 +1,6 @@
 # Fortress — AI 投资顾问 Agent Skill
 
-对话式 AI 投资顾问。3 个命名 Agent + 15 个 MCP 工具，覆盖个人基金投资全场景。
+对话式 AI 投资顾问。3 个命名 Agent + 16 个 MCP 工具，覆盖个人基金投资全场景。
 
 ## 安装
 
@@ -35,7 +35,7 @@ claude plugin install fortress
 | `机会捕捉` | B | 市场研判 → 基金筛选 → 多空信号 | "有没有机会"、"该加仓吗" |
 | `持仓诊断` | C | 健康评分 → 红线审计 → 压力测试 | "帮我看看持仓"、"体检一下" |
 
-## MCP 工具（15个：3 Agent + 12 支持）
+## MCP 工具（16个：3 Agent + 13 支持）
 
 ### 路径 A 核心链 — 底仓配置
 
@@ -43,7 +43,7 @@ claude plugin install fortress
 |------|------|---------|
 | `assess_risk` | 6 因子风险测评 → 等级 + 建议配置比 | horizon, max_loss_pct, income, experience, liquidity |
 | `get_allocation` | 三层四桶配置方案 → 具体金额分配 | risk_level, total_amount |
-| `screen_funds` | 基金筛选评分（v1 静态 / v2 五维） | funds[], allowed_types, nav_data? |
+| `screen_funds` | 基金筛选评分（5 维度加权） | funds[], allowed_types, risk_level? |
 | `get_advice` | 完整投顾管线 → HTML 报告 | path="A", message, equity?, bond?, cash? |
 
 ### 路径 B 核心链 — 机会捕捉

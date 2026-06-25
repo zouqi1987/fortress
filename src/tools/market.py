@@ -7,12 +7,10 @@ with the cache timestamp so LLM can disclose this to the user.
 import json
 import os
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
 
 from src.data.cache import MarketCache
 from src.data.market import CachedSource, MarketDataFacade
 from src.data.sources.akshare import AKShareSource
-from src.data.sources.eastmoney import EastmoneySource
 from src.data.sources.tiantian import TiantianSource
 
 _CACHE_DIR = os.environ.get("FORTRESS_DATA_DIR", "data")
@@ -96,7 +94,7 @@ def lookup_fund(code: str, start: str = "", end: str = "") -> dict:
             "date_range": {"start": start_date.isoformat(), "end": end_date.isoformat()},
             "recent_nav": [
                 {"date": n.date.isoformat(), "nav": float(n.nav), "acc_nav": float(n.acc_nav)}
-                for n in navs[-252:]  # up to 1 year of trading days for v2 scoring
+                for n in navs[-252:]  # up to 1 year of trading days for NAV scoring
             ],
             **cache_meta,
         }

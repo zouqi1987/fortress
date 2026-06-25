@@ -7,7 +7,6 @@ from decimal import Decimal
 
 from src.agent.state import ConversationState
 from src.engine.allocation import build_allocation
-from src.engine.risk_profile import RiskLevel
 
 
 def allocator_node(state: ConversationState) -> dict:

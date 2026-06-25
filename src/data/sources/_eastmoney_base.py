@@ -10,7 +10,7 @@ import urllib.request
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from src.datatypes import FundInfo, IndexPoint, NAVPoint, classify_fund_type
+from src.datatypes import FundInfo, NAVPoint, classify_fund_type
 
 logger = logging.getLogger(__name__)
 

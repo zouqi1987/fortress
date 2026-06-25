@@ -9,11 +9,16 @@ data are excluded — never fabricated.
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from src.datatypes import FundInfo, InsufficientDataError, fmt_amount
 from src.engine.institutional_consensus import score_institutional_consensus
 from src.engine.peer_scoring import score_peer_performance
 from src.engine.risk_personalization import classify_fund_type, get_weights
+
+if TYPE_CHECKING:
+    from src.data.sources.fund_pool import PoolFund
+    from src.data.sources.nav_store import NavStore
 
 
 @dataclass(frozen=True)
@@ -45,7 +50,7 @@ def score_funds(
     category_averages: dict[str, dict[str, float]],
     risk_level: str = "moderate",
 ) -> list[ScreenResult]:
-    """Unified fund scoring — 5 weighted dimensions, no v1/v2 branch.
+    """Unified fund scoring — 5 weighted dimensions.
 
     Dimensions (each 0-100, then weighted by fund-type × risk-profile):
       - institutional_consensus: 4 agency ratings (PoolFund)
@@ -159,7 +164,7 @@ def _score_fee(fee_rate: Decimal) -> int:
     """Score fee 0-100. Lower fee = higher score.
 
     Morningstar: fee is paramount — "expenses have as much weight as the
-    other pillars combined." Fee tiers aligned with existing _score_static bands.
+    other pillars combined." Fee tiers aligned with industry standards.
     """
     fee_pct = float(fee_rate) * 100  # Decimal 0.015 → 1.5%
     if fee_pct <= 0.15:
@@ -175,42 +180,14 @@ def _score_fee(fee_rate: Decimal) -> int:
     return 15
 
 
-def _score_static(fund: FundInfo) -> int:
-    """v1 static scoring: size(30) + age(20) + fee(25) + type(15) + bonus(10)."""
-    score = 0
-
-    size_val = min(fund.net_asset_value, Decimal("10_000_000_000"))
-    score += int(size_val * Decimal("30") / Decimal("10_000_000_000"))
-
-    age_days = (date.today() - fund.inception_date).days
-    score += min(20, age_days // 180)
-
-    if fund.fee_rate <= Decimal("0.005"):
-        score += 25
-    elif fund.fee_rate <= Decimal("0.010"):
-        score += 20
-    elif fund.fee_rate <= Decimal("0.015"):
-        score += 15
-    elif fund.fee_rate <= Decimal("0.020"):
-        score += 10
-    else:
-        score += 5
-
-    type_bonus = {"bond": 15, "mixed": 12, "index": 10, "stock": 8, "money": 5}
-    score += type_bonus.get(fund.type, 5)
-    score += 10
-
-    return score
-
-
-# ── v2 Performance Scoring Functions ──────────────────────────────────
+# ── Preserved scoring helpers (used by score_funds) ──────────────────
 
 
 def _compute_metrics(navs: list[float]) -> tuple[float, float] | None:
     """Compute 1-year return and annualized volatility from NAV sequence.
 
     Returns (ret_1y, ann_vol) or None if insufficient data (< 63 points).
-    Used by risk control scoring and personalization to avoid DRY violation.
+    Used by score_risk_control to avoid DRY violation.
     """
     if len(navs) < 63:
         return None
@@ -227,57 +204,6 @@ def _compute_metrics(navs: list[float]) -> tuple[float, float] | None:
     variance = sum((x - mean_r) ** 2 for x in daily_returns) / len(daily_returns)
     ann_vol = variance ** 0.5 * (252 ** 0.5)
     return (ret_1y, ann_vol)
-
-
-def score_performance(navs: list[float], benchmark: list[float] | None = None) -> int:
-    """Score multi-period returns (0–25). Recent periods weighted higher.
-
-    1m:3pts 3m:5pts 6m:5pts 1y:7pts. Positive → full; slightly negative → half.
-    When benchmark NAV history is provided, scores excess return instead:
-      excess > +2%: full points
-      excess > 0:   80% points
-      excess > -2%: 50% points
-      excess > -5%: 25% points
-      excess <= -5%: 0 points
-    """
-    if len(navs) < 22:
-        return 0
-
-    periods = {"1m": (21, 3), "3m": (63, 5), "6m": (126, 5), "1y": (252, 7)}
-    score = 0
-
-    for _, (days, pts) in periods.items():
-        if len(navs) <= days:
-            continue
-        start_nav = navs[-days - 1] if len(navs) > days else navs[0]
-        end_nav = navs[-1]
-        if start_nav <= 0:
-            continue
-        ret = (end_nav / start_nav - 1)
-
-        # ── Benchmark-relative scoring ──────────────────────────────
-        if benchmark and len(benchmark) > days:
-            b_start = benchmark[-days - 1] if len(benchmark) > days else benchmark[0]
-            b_end = benchmark[-1]
-            if b_start > 0:
-                excess = ret - (b_end / b_start - 1)
-                if excess > 0.02:
-                    score += pts
-                elif excess > 0:
-                    score += int(pts * 0.8)
-                elif excess > -0.02:
-                    score += pts // 2
-                elif excess > -0.05:
-                    score += int(pts * 0.25)
-                continue
-
-        # ── Absolute fallback (no benchmark or insufficient data) ────
-        if ret > 0:
-            score += pts
-        elif ret > -0.05:
-            score += pts // 2
-
-    return min(25, score)
 
 
 def score_risk_control(navs: list[float]) -> int:
@@ -355,37 +281,3 @@ def score_consistency(navs: list[float]) -> int:
 
     ratio = quarters_positive / quarters_total
     return min(10, int(ratio * 10))
-
-
-def score_manager(manager) -> int:
-    """Score fund manager quality (0–5). Based on tenure and return."""
-    if manager is None:
-        return 0
-
-    score = 0
-
-    # Tenure: 3+ years = 3pts, 1-3 = 2pts, <1 = 1pt, 0 = 0
-    if manager.tenure_days > 1095:
-        score += 3
-    elif manager.tenure_days > 365:
-        score += 2
-    elif manager.tenure_days > 0:
-        score += 1
-
-    # Cumulative return: parse and score
-    ret_str = manager.cumulative_return.replace("+", "").replace("%", "")
-    try:
-        cum_ret = float(ret_str)
-        if cum_ret > 50:
-            score += 2
-        elif cum_ret > 10:
-            score += 1
-    except (ValueError, AttributeError):
-        pass
-
-    # Penalty for managing too many funds (>5)
-    if manager.fund_count > 5:
-        score = max(0, score - 1)
-
-    return min(5, score)
-

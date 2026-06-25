@@ -264,7 +264,7 @@ def main():
         from a2a.server.request_handlers import DefaultRequestHandler
         from a2a.server.agent_execution import AgentExecutor
         from a2a.server.tasks import InMemoryTaskStore
-        from a2a.types import TaskState, TextPart
+        from a2a.types import TextPart
         import uvicorn
     except ImportError as e:
         logger.info("A2A SDK not fully available: %s", e)
