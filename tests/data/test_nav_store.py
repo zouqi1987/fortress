@@ -376,20 +376,24 @@ class TestUpdate:
         # 8 dates (17-24), latest_db_date=17, 7 dates after → gap=7
         assert report.gap_days == 7
 
-    def test_gap_gt_30_triggers_manual_backfill(self, tmp_path):
-        """Gap>30 → action='manual_backfill_needed'."""
+    def test_gap_gt_30_triggers_auto_backfill(self, tmp_path):
+        """Gap>30 → action='auto_backfill_completed' (auto-trigger full backfill)."""
         store = NavStore(str(tmp_path / "nav.db"))
         self._seed_nav(store, "001", ["2026-05-01"], [1.0])
 
         # 35 trading dates from May 1 to Jun 24
         dates = [f"2026-05-{d:02d}" for d in range(1, 32)] + \
                 [f"2026-06-{d:02d}" for d in range(1, 25)]
+        # Mock backfill to avoid real HTTP
         with self._mock_trading_dates(dates), \
-             self._mock_daily_em([]):
+             self._mock_daily_em([]), \
+             mock.patch.object(NavStore, "backfill",
+                               return_value=BackfillReport(1, 0, 0, 5, [])) as mock_bf:
             report = store.update()
 
-        assert report.action == "manual_backfill_needed"
+        assert report.action == "auto_backfill_completed"
         assert report.gap_days > 30
+        mock_bf.assert_called_once()
 
     def test_weekend_gap_counts_trading_days(self, tmp_path):
         """Fri(May 22) → Mon(May 25) = 1 trading day, not 3 calendar."""
@@ -405,15 +409,18 @@ class TestUpdate:
         assert report.action == "bulk_update"
         assert report.gap_days == 2
 
-    def test_empty_store_triggers_manual_backfill(self, tmp_path):
-        """No NAV data → gap is infinite → manual_backfill_needed."""
+    def test_empty_store_triggers_auto_backfill(self, tmp_path):
+        """No NAV data → auto-trigger full backfill."""
         store = NavStore(str(tmp_path / "nav.db"))
         with self._mock_trading_dates(["2026-06-24"]), \
-             self._mock_daily_em([]):
+             self._mock_daily_em([]), \
+             mock.patch.object(NavStore, "backfill",
+                               return_value=BackfillReport(1, 0, 0, 5, [])) as mock_bf:
             report = store.update()
 
-        assert report.action == "manual_backfill_needed"
+        assert report.action == "auto_backfill_completed"
         assert report.latest_db_date is None
+        mock_bf.assert_called_once()
 
     def test_update_report_is_frozen_dataclass(self, tmp_path):
         """UpdateReport is a frozen dataclass."""
