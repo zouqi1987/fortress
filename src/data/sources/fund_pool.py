@@ -80,6 +80,9 @@ def fetch_fund_pool(
             name = str(row.get("基金简称", code))
             fund_type = _classify_type(str(row.get("类型", "混合型-灵活")))
             raw_type = str(row.get("类型", "混合型-灵活"))
+            # Handle pandas NaN → string "nan" (6,425 funds have this)
+            if raw_type in ("nan", "None", ""):
+                raw_type = "混合型-灵活"
             manager = str(row.get("基金经理", "未知"))
             fee_str = str(row.get("手续费", "0.015")).replace("%", "")
             fee = Decimal(fee_str) / Decimal("100") if fee_str else Decimal("0.015")

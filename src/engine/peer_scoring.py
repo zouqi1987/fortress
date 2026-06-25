@@ -46,15 +46,22 @@ def score_peer_performance(
     Returns:
         0-100 integer score. 50 = peer average, >50 beats peers, <50 lags.
     """
+    import math
+
     weighted_excess = 0.0
     matched_periods = 0
     for period, weight in period_weights.items():
         if period not in fund_returns:
             # Graceful: missing period → 0 excess for this period.
             continue
-        matched_periods += 1
         fund_val = fund_returns[period]
         cat_val = category_averages.get(period, 0.0)
+        # Guard against NaN (akshare returns NaN for some funds/periods)
+        if isinstance(fund_val, float) and math.isnan(fund_val):
+            continue
+        if isinstance(cat_val, float) and math.isnan(cat_val):
+            cat_val = 0.0
+        matched_periods += 1
         weighted_excess += (fund_val - cat_val) * weight
 
     if matched_periods == 0:

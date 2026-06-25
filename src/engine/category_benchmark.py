@@ -38,6 +38,7 @@ def compute_category_averages(
         groups.setdefault(key, []).append(f)
 
     # Compute averages per group per period
+    import math
     result: dict[str, dict[str, float]] = {}
     for gtype, group in groups.items():
         if not group:
@@ -45,7 +46,9 @@ def compute_category_averages(
         avgs: dict[str, float] = {}
         for period in PERIODS:
             values = [getattr(f, period, 0.0) for f in group]
-            avgs[period] = sum(values) / len(values)
+            # Filter out NaN values (akshare returns NaN for some funds/periods)
+            valid = [v for v in values if not (isinstance(v, float) and math.isnan(v))]
+            avgs[period] = sum(valid) / len(valid) if valid else 0.0
         result[gtype] = avgs
 
     return result

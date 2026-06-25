@@ -108,6 +108,31 @@ class TestPeriodWeights:
         }
 
 
+class TestNaNGuard:
+    """Tests for NaN value handling (akshare returns NaN for some funds)."""
+
+    def test_nan_fund_return_skipped(self):
+        """Fund return = NaN for one period → that period skipped, no crash."""
+        fund = _full_returns(ret_1y=float("nan"), ret_1m=1.0, ret_3m=2.0,
+                            ret_6m=3.0, ret_3y=5.0)
+        cat = _full_returns(ret_1y=0.0, ret_1m=0.0, ret_3m=0.0,
+                            ret_6m=0.0, ret_3y=0.0)
+        # Should not crash, should return a valid score
+        score = score_peer_performance(fund, cat)
+        assert isinstance(score, int)
+        assert 0 <= score <= 100
+
+    def test_nan_category_avg_treated_as_zero(self):
+        """Category avg = NaN → treated as 0.0, fund's raw return becomes excess."""
+        fund = _full_returns(ret_1y=10.0, ret_1m=1.0, ret_3m=2.0,
+                            ret_6m=3.0, ret_3y=5.0)
+        cat = {"ret_1y": float("nan"), "ret_1m": 0.0, "ret_3m": 0.0,
+               "ret_6m": 0.0, "ret_3y": 0.0}
+        score = score_peer_performance(fund, cat)
+        assert isinstance(score, int)
+        assert 0 <= score <= 100
+
+
 class TestEmptyInputGuard:
     def test_empty_fund_returns_raises(self):
         """No periods in fund_returns → InsufficientDataError, not fabricated 50.
