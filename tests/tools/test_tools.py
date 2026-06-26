@@ -83,6 +83,47 @@ class TestGetAdvice:
         result = get_advice("C", "diagnose", {"equity": 50000, "bond": 50000, "cash": 0})
         assert len(result["report_html"]) > 0
 
+    def test_num_holdings_propagates_to_health_check(self):
+        """num_holdings must reach the health checker, not silently default to 0.
+
+        Regression: previously the MCP wrappers didn't accept num_holdings, so
+        risk_assessor always computed len(state['holdings'])==0 and the report
+        falsely warned '持仓数量过少 (0只)' even for a 3-fund portfolio.
+        """
+        result = get_advice(
+            "C", "diagnose",
+            {"equity": 50000, "bond": 50000, "cash": 0},
+            num_holdings=3,
+        )
+        html = result["report_html"]
+        assert "持仓数量过少 (3只)" in html
+        assert "持仓数量过少 (0只)" not in html
+
+    def test_num_holdings_in_optimal_range_removes_warning(self):
+        """5 holdings falls in the 4-8 optimal range — no '过少' warning."""
+        result = get_advice(
+            "C", "diagnose",
+            {"equity": 50000, "bond": 50000, "cash": 0},
+            num_holdings=5,
+        )
+        assert "持仓数量过少" not in result["report_html"]
+
+    def test_default_num_holdings_preserves_zero_behavior(self):
+        """Backward compat: omitting num_holdings keeps the legacy 0 count."""
+        result = get_advice("C", "diagnose", {"equity": 50000, "bond": 50000, "cash": 0})
+        assert "持仓数量过少 (0只)" in result["report_html"]
+
+    def test_num_holdings_over_diversified_warns(self):
+        """20 holdings exceeds the 4-8 optimal range — '过多' branch fires."""
+        result = get_advice(
+            "C", "diagnose",
+            {"equity": 50000, "bond": 50000, "cash": 0},
+            num_holdings=20,
+        )
+        html = result["report_html"]
+        assert "持仓数量过多 (20只)" in html
+        assert "持仓数量过少" not in html
+
 
 class TestAuditSingleFund:
     def test_clean_fund_passes(self):

@@ -75,6 +75,7 @@ AGENT_CARD: dict = {
                     "equity": {"type": "number"},
                     "bond": {"type": "number"},
                     "cash": {"type": "number"},
+                    "num_holdings": {"type": "integer", "description": "持仓基金数量（影响分散度评分；不传按0只计）"},
                 },
                 "required": ["path", "message"],
             },

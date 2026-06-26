@@ -28,7 +28,7 @@ class DebateSignals:
 
 def extract_signals(
     market_data: dict[str, list],
-    holdings: list[dict],
+    holdings: list[object],
 ) -> DebateSignals:
     """Extract structured debate signals from raw data.
 
@@ -37,7 +37,10 @@ def extract_signals(
 
     Args:
         market_data: fund_code → list of data dicts (NAV, PE, volatility, etc.)
-        holdings: list of current position dicts
+        holdings: list of current positions. Only ``len(holdings)`` is used by
+            this function (to size the diversification signal) — element contents
+            are never read. Callers that know only the count may pass a placeholder
+            list (e.g. ``[None] * n``); see ``src/tools/advisory.py`` get_advice.
 
     Returns:
         DebateSignals with bull/bear signals and conclusion framework.
