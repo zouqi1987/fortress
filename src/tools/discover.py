@@ -6,13 +6,13 @@ Stage 2: enrich those 200 with risk_control + persistence (NavStore)
          and recompute with full 5-dim weights → top_n.
 """
 from decimal import Decimal
-from datetime import date
 
-from src.datatypes import FundInfo, InsufficientDataError
 from src.engine.risk_personalization import classify_fund_type, get_weights
 from src.engine.screener import (
-    ScreenConfig, ScreenResult, LightResult,
-    score_funds_light, score_risk_control, score_consistency, _score_fee,
+    ScreenConfig,
+    score_funds_light,
+    score_risk_control,
+    score_consistency,
 )
 
 # How many Stage 1 survivors advance to Stage 2.
@@ -65,13 +65,17 @@ def discover_funds(
     HOW TO USE:
     - risk_level: "conservative"|"moderate"|"aggressive" (影响评分权重)
     - allowed_types: 逗号分隔 "bond,mixed,index", 空=全部
-    - min_net_asset_value: 最低规模(元), 默认0不过滤
+    - min_net_asset_value: 最低规模(元), 默认0。注意: Stage 1 无法按规模过滤
+      (PoolFund 无此字段)，此参数当前不生效。买入前请用 audit_single_fund 检查规模红线。
     - max_fee_rate: 最高费率, 默认0.03 (3%)
     - top_n: 返回前N只, 默认10
 
     RETURNS: {count, results[], stage1_evaluated, stage2_evaluated, personalized}
     - results: 按 score 降序, 含 5 维度评分 + warnings
     """
+    if top_n < 0:
+        top_n = 0
+
     # ── Build ScreenConfig ──────────────────────────────────────────
     types_set = frozenset(
         t.strip() for t in allowed_types.split(",") if t.strip()
@@ -90,6 +94,9 @@ def discover_funds(
         return {
             "count": 0,
             "results": [],
+            "stage1_evaluated": 0,
+            "stage2_evaluated": 0,
+            "personalized": risk_level,
             "error": "NAV 数据库为空，请先运行回填: python3 -m src.data.sources.nav_store --backfill",
         }
 
@@ -101,7 +108,13 @@ def discover_funds(
     cat_avg = cat_avg_data.get("broad") or cat_avg_data if cat_avg_data else {}
 
     if not pool_index:
-        return {"count": 0, "results": [], "stage1_evaluated": 0, "stage2_evaluated": 0}
+        return {
+            "count": 0,
+            "results": [],
+            "stage1_evaluated": 0,
+            "stage2_evaluated": 0,
+            "personalized": risk_level,
+        }
 
     # ── Stage 1: light-score full pool ───────────────────────────────
     stage1_results = score_funds_light(

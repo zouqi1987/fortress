@@ -60,6 +60,15 @@ class TestDiscoverFunds:
         with pytest.raises(ValueError):
             discover_funds(risk_level="invalid")
 
+    def test_negative_top_n_returns_zero(self, monkeypatch):
+        """top_n < 0 should be clamped to 0, not return last N items."""
+        monkeypatch.setattr("src.tools.discover._get_or_load_pool_index", _mock_pool_index)
+        monkeypatch.setattr("src.tools.discover._get_or_load_category_averages", lambda: _MOCK_AVGS)
+        monkeypatch.setattr("src.tools.discover._get_nav_store", _mock_nav_store)
+        result = discover_funds(risk_level="conservative", top_n=-1)
+        assert result["count"] == 0
+        assert result["results"] == []
+
 
 # ── Test fixtures ──────────────────────────────────────────────────
 from decimal import Decimal
