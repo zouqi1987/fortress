@@ -36,7 +36,8 @@ class ScreenResult:
     fund: FundInfo
     score: int  # 0–100, higher = better
     warnings: tuple[str, ...]
-    dimension_breakdown: dict[str, int] = field(default_factory=dict)
+    dimension_breakdown: dict[str, dict] = field(default_factory=dict)
+    # Each dim: {"score": int 0-100, "raw": <input data>, "benchmark": <avg or None>}
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,8 @@ class LightResult:
     name: str
     fund_type: str
     score: int  # 0–100, weighted by renormalized Stage 1 weights
-    dimension_breakdown: dict[str, int] = field(default_factory=dict)
+    dimension_breakdown: dict[str, dict] = field(default_factory=dict)
+    # Each dim: {"score": int 0-100, "raw": <input data>} (no benchmark in Stage 1)
 
 
 # ── Unified scoring (score_funds) ─────────────────────────────────────
@@ -106,7 +108,7 @@ def score_funds(
 
         fund_class = classify_fund_type(fund.type)
         weights = get_weights(fund_class, risk_level)  # raises ValueError if invalid
-        dimensions: dict[str, int] = {}
+        dimensions: dict[str, dict] = {}
         warnings: list[str] = []
 
         # ── Dimension 1: Institutional consensus ─────────────────────
@@ -117,7 +119,11 @@ def score_funds(
                 "zhaoshang": pool_fund.rating_zhaoshang,
                 "jiAn": pool_fund.rating_jiAn,
             }
-            dimensions["institutional_consensus"] = score_institutional_consensus(ratings)
+            dimensions["institutional_consensus"] = {
+                "score": score_institutional_consensus(ratings),
+                "raw": ratings,
+                "benchmark": None,
+            }
         except InsufficientDataError:
             continue  # excluded — no ratings
 
@@ -134,25 +140,41 @@ def score_funds(
         if not cat_avg:
             continue  # excluded — no category averages for this fund type
         try:
-            dimensions["peer_performance"] = score_peer_performance(fund_returns, cat_avg)
+            dimensions["peer_performance"] = {
+                "score": score_peer_performance(fund_returns, cat_avg),
+                "raw": fund_returns,
+                "benchmark": cat_avg,
+            }
         except InsufficientDataError:
             continue  # excluded — no returns
 
         # ── Dimension 3: Fee ──────────────────────────────────────────
-        dimensions["fee"] = _score_fee(fund.fee_rate)
+        dimensions["fee"] = {
+            "score": _score_fee(fund.fee_rate),
+            "raw": float(fund.fee_rate),
+            "benchmark": None,  # filled by tool layer (needs pool for avg)
+        }
 
         # ── Dimensions 4-5: Risk control + Persistence (not for money) ─
         if fund_class != "money":
             nav_series = nav_store.get_nav_series(fund.code)
             if len(nav_series) < 63:
                 continue  # excluded — insufficient NAV
-            # Rescale: score_risk_control returns 0-20, ×5 → 0-100
-            dimensions["risk_control"] = score_risk_control(nav_series) * 5
-            # Rescale: score_consistency returns 0-10, ×10 → 0-100
-            dimensions["persistence"] = score_consistency(nav_series) * 10
+            rc_score, rc_raw = score_risk_control(nav_series)
+            dimensions["risk_control"] = {
+                "score": rc_score * 5,  # rescale 0-20 → 0-100
+                "raw": rc_raw,
+                "benchmark": None,
+            }
+            c_score, c_raw = score_consistency(nav_series)
+            dimensions["persistence"] = {
+                "score": c_score * 10,  # rescale 0-10 → 0-100
+                "raw": c_raw,
+                "benchmark": None,
+            }
 
         # ── Weighted final score ──────────────────────────────────────
-        score = int(sum(dimensions[d] * weights[d] for d in weights))
+        score = int(sum(dimensions[d]["score"] * weights[d] for d in weights))
 
         # ── Warnings (ported from screen_funds) ──────────────────────
         if fund.net_asset_value < Decimal("200_000_000"):
@@ -216,7 +238,7 @@ def score_funds_light(
 
         fund_class = classify_fund_type(pf.fund_type)
         weights = get_weights_light(fund_class, risk_level)
-        dimensions: dict[str, int] = {}
+        dimensions: dict[str, dict] = {}
 
         # ── Dimension 1: Institutional consensus ─────────────────────
         try:
@@ -226,7 +248,11 @@ def score_funds_light(
                 "zhaoshang": pf.rating_zhaoshang,
                 "jiAn": pf.rating_jiAn,
             }
-            dimensions["institutional_consensus"] = score_institutional_consensus(ratings)
+            dimensions["institutional_consensus"] = {
+                "score": score_institutional_consensus(ratings),
+                "raw": ratings,
+                "benchmark": None,
+            }
         except InsufficientDataError:
             continue  # excluded — no ratings
 
@@ -240,15 +266,23 @@ def score_funds_light(
         if not cat_avg:
             continue  # excluded — no category averages
         try:
-            dimensions["peer_performance"] = score_peer_performance(fund_returns, cat_avg)
+            dimensions["peer_performance"] = {
+                "score": score_peer_performance(fund_returns, cat_avg),
+                "raw": fund_returns,
+                "benchmark": cat_avg,
+            }
         except InsufficientDataError:
             continue  # excluded — no returns
 
         # ── Dimension 3: Fee ──────────────────────────────────────────
-        dimensions["fee"] = _score_fee(Decimal(str(pf.fee)))
+        dimensions["fee"] = {
+            "score": _score_fee(Decimal(str(pf.fee))),
+            "raw": float(pf.fee),
+            "benchmark": None,  # filled by tool layer (needs pool for avg)
+        }
 
         # ── Weighted Stage 1 score ──────────────────────────────────
-        score = int(sum(dimensions[d] * weights[d] for d in weights))
+        score = int(sum(dimensions[d]["score"] * weights[d] for d in weights))
 
         results.append(LightResult(
             code=pf.code, name=pf.name, fund_type=pf.fund_type,
@@ -305,13 +339,14 @@ def _compute_metrics(navs: list[float]) -> tuple[float, float] | None:
     return (ret_1y, ann_vol)
 
 
-def score_risk_control(navs: list[float]) -> int:
+def score_risk_control(navs: list[float]) -> tuple[int, dict]:
     """Score risk control (0–20). Lower drawdown + lower volatility = higher.
 
+    Returns (score, {"max_drawdown": float|None, "ann_volatility": float|None}).
     Uses _compute_metrics for shared volatility/drawdown computation.
     """
     if len(navs) < 63:
-        return 0
+        return 0, {"max_drawdown": None, "ann_volatility": None}
 
     prices = [float(v) for v in navs]
 
@@ -338,7 +373,7 @@ def score_risk_control(navs: list[float]) -> int:
     # Volatility penalty (0–10) — uses shared helper
     metrics = _compute_metrics(navs)
     if metrics is None:
-        return dd_score
+        return dd_score, {"max_drawdown": max_dd, "ann_volatility": None}
 
     ann_vol = metrics[1]
 
@@ -352,13 +387,16 @@ def score_risk_control(navs: list[float]) -> int:
     elif ann_vol > 0.08:
         vol_score = 8
 
-    return dd_score + vol_score
+    return dd_score + vol_score, {"max_drawdown": max_dd, "ann_volatility": ann_vol}
 
 
-def score_consistency(navs: list[float]) -> int:
-    """Score return consistency (0–10). Based on quarterly positive rate."""
+def score_consistency(navs: list[float]) -> tuple[int, dict]:
+    """Score return consistency (0–10). Based on quarterly positive rate.
+
+    Returns (score, {"quarterly_positive_rate": float|None}).
+    """
     if len(navs) < 126:
-        return 0
+        return 0, {"quarterly_positive_rate": None}
 
     # Approximate quarters using 63-day windows
     quarter_size = 63
@@ -376,7 +414,7 @@ def score_consistency(navs: list[float]) -> int:
             quarters_total += 1
 
     if quarters_total == 0:
-        return 0
+        return 0, {"quarterly_positive_rate": None}
 
     ratio = quarters_positive / quarters_total
-    return min(10, int(ratio * 10))
+    return min(10, int(ratio * 10)), {"quarterly_positive_rate": ratio}

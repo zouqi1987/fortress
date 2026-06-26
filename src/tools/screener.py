@@ -169,6 +169,20 @@ def screen_funds(
         risk_level=risk_level or "moderate",
     )
 
+    # ── Fill fee benchmarks (avg fee per fund_type from pool) ────────
+    fee_benchmarks: dict[str, float] = {}
+    if pool_index:
+        from collections import defaultdict
+        fee_sums: dict[str, float] = defaultdict(float)
+        fee_counts: dict[str, int] = defaultdict(int)
+        for pf in pool_index.values():
+            fee_sums[pf.fund_type] += float(pf.fee)
+            fee_counts[pf.fund_type] += 1
+        fee_benchmarks = {t: fee_sums[t] / fee_counts[t] for t in fee_counts if fee_counts[t] > 0}
+        for r in results:
+            if "fee" in r.dimension_breakdown:
+                r.dimension_breakdown["fee"]["benchmark"] = fee_benchmarks.get(r.fund.type)
+
     # ── Build output with dimension breakdown ─────────────────────────
     have_peers = bool(cat_avg_data)
 

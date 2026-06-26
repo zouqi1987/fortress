@@ -308,37 +308,47 @@ class TestScoreFee:
 class TestScoreRiskControl:
     def test_stable_nav_low_risk(self):
         navs = [1.0 + i * 0.001 for i in range(100)]
-        s = score_risk_control(navs)
+        s, raw = score_risk_control(navs)
         assert s >= 15
+        assert raw["max_drawdown"] is not None
+        assert raw["ann_volatility"] is not None
 
     def test_volatile_nav_high_risk(self):
         navs = [1.0 + (0.1 if i % 2 == 0 else -0.1) for i in range(100)]
-        s = score_risk_control(navs)
+        s, raw = score_risk_control(navs)
         assert s <= 10
+        assert raw["max_drawdown"] is not None
 
     def test_empty_returns_zero(self):
-        assert score_risk_control([]) == 0
+        s, raw = score_risk_control([])
+        assert s == 0
+        assert raw["max_drawdown"] is None
+        assert raw["ann_volatility"] is None
 
     def test_decimal_nav_does_not_crash(self):
         from decimal import Decimal as D
         navs = [D("1.0"), D("1.01"), D("1.02")]
-        s = score_risk_control(navs)
+        s, raw = score_risk_control(navs)
         assert isinstance(s, int)
         assert 0 <= s <= 20
+        assert "max_drawdown" in raw
 
 
 class TestScoreConsistency:
     def test_all_positive_quarters(self):
         navs = [1.0 * (1.002 ** i) for i in range(504)]
-        s = score_consistency(navs)
+        s, raw = score_consistency(navs)
         assert s >= 8
+        assert raw["quarterly_positive_rate"] is not None
 
     def test_mixed_quarters(self):
         navs = [1.0] * 503
         for i in range(0, 503, 126):
             navs[i] = 0.9
-        s = score_consistency(navs)
+        s, raw = score_consistency(navs)
         assert s >= 0
 
     def test_empty_returns_zero(self):
-        assert score_consistency([]) == 0
+        s, raw = score_consistency([])
+        assert s == 0
+        assert raw["quarterly_positive_rate"] is None

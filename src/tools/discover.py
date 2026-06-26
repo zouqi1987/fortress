@@ -135,6 +135,16 @@ def discover_funds(
     # ── Take top N candidates for Stage 2 ────────────────────────────
     candidates = stage1_results[:_STAGE2_CANDIDATES]
 
+    # ── Compute fee benchmarks (avg fee per fund_type from pool) ─────
+    fee_benchmarks: dict[str, float] = {}
+    from collections import defaultdict
+    fee_sums: dict[str, float] = defaultdict(float)
+    fee_counts: dict[str, int] = defaultdict(int)
+    for pf in pool_index.values():
+        fee_sums[pf.fund_type] += float(pf.fee)
+        fee_counts[pf.fund_type] += 1
+    fee_benchmarks = {t: fee_sums[t] / fee_counts[t] for t in fee_counts if fee_counts[t] > 0}
+
     # ── Stage 2: enrich with risk_control + persistence ──────────────
     final_results: list[dict] = []
     for light in candidates:
@@ -144,7 +154,11 @@ def discover_funds(
 
         fund_class = classify_fund_type(light.fund_type)
         full_weights = get_weights(fund_class, risk_level)
-        dimensions = dict(light.dimension_breakdown)  # copy 3 Stage 1 dims
+        dimensions = dict(light.dimension_breakdown)  # copy enriched Stage 1 dims
+
+        # Fill fee benchmark (not available in engine layer — needs pool)
+        if "fee" in dimensions:
+            dimensions["fee"]["benchmark"] = fee_benchmarks.get(light.fund_type)
 
         warnings: list[str] = []
 
@@ -153,11 +167,21 @@ def discover_funds(
             nav_series = nav_store.get_nav_series(light.code)
             if len(nav_series) < 63:
                 continue  # excluded — insufficient NAV
-            dimensions["risk_control"] = score_risk_control(nav_series) * 5
-            dimensions["persistence"] = score_consistency(nav_series) * 10
+            rc_score, rc_raw = score_risk_control(nav_series)
+            dimensions["risk_control"] = {
+                "score": rc_score * 5,
+                "raw": rc_raw,
+                "benchmark": None,
+            }
+            c_score, c_raw = score_consistency(nav_series)
+            dimensions["persistence"] = {
+                "score": c_score * 10,
+                "raw": c_raw,
+                "benchmark": None,
+            }
 
         # ── Recompute score with FULL weights ────────────────────────
-        score = int(sum(dimensions[d] * full_weights[d] for d in full_weights))
+        score = int(sum(dimensions[d]["score"] * full_weights[d] for d in full_weights))
 
         # ── Warnings (fee only — no net_asset_value/inception in PoolFund) ──
         if Decimal(str(pool_fund.fee)) > Decimal("0.015"):

@@ -250,11 +250,11 @@
         <td>{{ item.code }}</td>
         <td>{{ item.name }}</td>
         <td>{{ item.fund_type_class }}</td>
-        <td class="num">{{ item.dimensions.institutional_consensus }}</td>
-        <td class="num">{{ item.dimensions.peer_performance }}</td>
-        <td class="num">{{ item.dimensions.risk_control if item.dimensions.risk_control is defined else "N/A" }}</td>
-        <td class="num">{{ item.dimensions.persistence if item.dimensions.persistence is defined else "N/A" }}</td>
-        <td class="num">{{ item.dimensions.fee }}</td>
+        <td class="num">{{ item.dimensions.institutional_consensus.score if item.dimensions.institutional_consensus is defined else "N/A" }}</td>
+        <td class="num">{{ item.dimensions.peer_performance.score if item.dimensions.peer_performance is defined else "N/A" }}</td>
+        <td class="num">{{ item.dimensions.risk_control.score if item.dimensions.risk_control is defined else "N/A" }}</td>
+        <td class="num">{{ item.dimensions.persistence.score if item.dimensions.persistence is defined else "N/A" }}</td>
+        <td class="num">{{ item.dimensions.fee.score if item.dimensions.fee is defined else "N/A" }}</td>
         <td class="num"><strong>{{ item.score }}</strong></td>
       </tr>
     {% endfor %}
