@@ -5,14 +5,25 @@
 ## 安装
 
 ```bash
-# Claude Code — 本地添加
-claude plugin add /path/to/fortress
+# 1. 克隆仓库
+git clone https://github.com/zouqi1987/fortress.git && cd fortress
 
-# Claude Code — 从 Marketplace 安装（已发布后）
+# 2. 配置 Python 虚拟环境（macOS / Linux 通用）
+#    自动检测 conda / uv / system python，创建 .venv 并安装依赖
+./bin/ensure-venv.sh
+
+# 3. Claude Code — 本地添加
+claude plugin add .
+
+# 或从 Marketplace 安装（已发布后）
 claude plugin install fortress
 
 # Hermes Agent — 在 ~/.hermes/config.yaml 中添加 local skill
 ```
+
+> `.mcp.json` 使用 `./.venv/bin/python3` 作为 MCP server 运行时。
+> 每台机器运行 `./bin/ensure-venv.sh` 即可适配各自的 Python 环境。
+> `python3` 二进制来自项目 `.venv`，不依赖系统全局配置。
 
 ## 架构理念
 
