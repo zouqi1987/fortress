@@ -40,10 +40,24 @@ class TestScoreFundsLight:
         assert len(results) == 0  # excluded — no ratings
 
     def test_excludes_fund_with_no_category_averages(self):
-        pool = [_make_pool_fund(fund_type="exotic_type")]
+        # Use a valid fund_type so the fund passes the type filter (screener.py:212)
+        # and actually reaches the cat_avg check at screener.py:240. With empty_avgs,
+        # cat_avg is {} → fund excluded for the right reason.
+        pool = [_make_pool_fund(fund_type="bond")]
         empty_avgs = {}
         results = score_funds_light(pool, ScreenConfig(), empty_avgs, "conservative")
-        assert len(results) == 0
+        assert len(results) == 0  # excluded — no category averages (right reason)
+
+    def test_excludes_fund_with_no_returns(self):
+        # All returns NaN → score_peer_performance skips every period
+        # (peer_scoring.py:60-61), matched_periods stays 0, raises
+        # InsufficientDataError (peer_scoring.py:67-68) → fund excluded
+        # at screener.py:244-245. Zero returns would NOT trigger this path
+        # (zero is a valid float, produces matched_periods=5 + low score).
+        nan = float("nan")
+        pool = [_make_pool_fund(ret_1m=nan, ret_3m=nan, ret_6m=nan, ret_1y=nan, ret_3y=nan)]
+        results = score_funds_light(pool, ScreenConfig(), CATEGORY_AVERAGES, "conservative")
+        assert len(results) == 0  # excluded — no usable returns data
 
     def test_filters_by_allowed_types(self):
         pool = [_make_pool_fund(code="A", fund_type="bond"),
