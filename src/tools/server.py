@@ -1,4 +1,4 @@
-"""Fortress MCP Server — 16 tools across 3 named Agents + 13 supporting tools.
+"""Fortress MCP Server — 17 tools across 3 named Agents + 14 supporting tools.
 
 Usage:
     python -m src.tools.server          # stdio transport (MCP clients)
@@ -9,11 +9,11 @@ Three Named Agents (one-click entry points):
     机会捕捉(求收益):   hunt_opportunity    → 市场周期研判 → 基金筛选 → 多空信号
     持仓诊断(求安心):   diagnose_holdings   → 健康评分 → 红线审计 → 压力测试
 
-Thirteen Supporting Tools:
+Fourteen Supporting Tools:
     assess_risk, get_allocation, get_advice (legacy), screen_funds,
     audit_single_fund, run_scenario, lookup_fund, lookup_index,
     check_health, detect_regime, list_hard_rules, manage_personal_rules,
-    export_report
+    export_report, discover_funds
 """
 from mcp.server.fastmcp import FastMCP
 
@@ -107,6 +107,7 @@ def get_advice(
     equity: float = 0,
     bond: float = 0,
     cash: float = 0,
+    num_holdings: int = 0,
 ) -> dict:
     """【全路径通用】运行完整投顾管线，生成HTML分析报告。
 
@@ -125,13 +126,14 @@ def get_advice(
     - 如果用户问"有没有机会"、"现在该买什么"，用 path="B"
     - 如果用户问"检查下我的持仓"、"组合健康吗"，用 path="C"
     - equity/bond/cash: 当前持仓金额（可选，有就传）
+    - num_holdings: 当前持仓基金数量（可选，影响分散度评分；不传则按0只计）
 
     RETURNS: {report_html, path, errors[]}
     - report_html: 含6段式报告(持仓→风险→配置→审计→压测→健康)的HTML
     - errors: 管线执行中的问题列表
     """
     portfolio = {"equity": equity, "bond": bond, "cash": cash}
-    return _get_advice(path, message, portfolio)
+    return _get_advice(path, message, portfolio, num_holdings=num_holdings)
 
 
 # ── Agent 1: 底仓配置 (Path A) ─────────────────────────────────────────
@@ -142,6 +144,7 @@ def allocate_portfolio(
     equity: float = 0,
     bond: float = 0,
     cash: float = 0,
+    num_holdings: int = 0,
 ) -> dict:
     """【路径A】底仓配置Agent — 完整的首次投资组合建立流程。
 
@@ -156,10 +159,11 @@ def allocate_portfolio(
     HOW TO USE:
     - message: 描述你的财务情况、投资目标、风险偏好等（必填）
     - equity/bond/cash: 当前持仓金额，默认0（可选）
+    - num_holdings: 当前持仓基金数量（可选，影响分散度评分；不传则按0只计）
 
     RETURNS: {report_html, path, errors[]}
     """
-    return _allocate_portfolio(message, equity, bond, cash)
+    return _allocate_portfolio(message, equity, bond, cash, num_holdings=num_holdings)
 
 
 # ── Agent 2: 机会捕捉 (Path B) ─────────────────────────────────────────
@@ -170,6 +174,7 @@ def hunt_opportunity(
     equity: float = 0,
     bond: float = 0,
     cash: float = 0,
+    num_holdings: int = 0,
 ) -> dict:
     """【路径B】机会捕捉Agent — 市场机会识别与调仓建议。
 
@@ -184,10 +189,11 @@ def hunt_opportunity(
     HOW TO USE:
     - message: 描述你关注的市场、板块或基金类型（必填）
     - equity/bond/cash: 当前持仓金额（可选）
+    - num_holdings: 当前持仓基金数量（可选，影响分散度评分；不传则按0只计）
 
     RETURNS: {report_html, path, errors[]}
     """
-    return _hunt_opportunity(message, equity, bond, cash)
+    return _hunt_opportunity(message, equity, bond, cash, num_holdings=num_holdings)
 
 
 # ── Agent 3: 持仓诊断 (Path C) ─────────────────────────────────────────
@@ -198,6 +204,7 @@ def diagnose_holdings(
     equity: float = 0,
     bond: float = 0,
     cash: float = 0,
+    num_holdings: int = 0,
 ) -> dict:
     """【路径C】持仓诊断Agent — 投资组合健康检查与风险排查。
 
@@ -212,10 +219,11 @@ def diagnose_holdings(
     HOW TO USE:
     - message: 描述你的持仓情况和担忧（必填）
     - equity/bond/cash: 当前持仓金额（可选，有就传）
+    - num_holdings: 当前持仓基金数量（可选，影响分散度评分；不传则按0只计，会误报"持仓数量过少"）
 
     RETURNS: {report_html, path, errors[]}
     """
-    return _diagnose_holdings(message, equity, bond, cash)
+    return _diagnose_holdings(message, equity, bond, cash, num_holdings=num_holdings)
 
 
 # ── Tool 7: Fund Audit ───────────────────────────────────────────────
@@ -553,6 +561,48 @@ def export_report(
     - message: 用户可读的保存确认消息
     """
     return _export_report(report_html, output_path, title)
+
+
+# ── Tool 17: Fund Discovery ───────────────────────────────────────────
+
+@server.tool()
+def discover_funds(
+    risk_level: str,
+    allowed_types: str = "",
+    min_net_asset_value: float = 0,
+    max_fee_rate: float = 0.03,
+    top_n: int = 10,
+) -> dict:
+    """【全市场基金发现】从 19,747 只基金池中筛选并评分 top N。
+
+    两阶段流水线:
+      Stage 1: 3 维度(机构共识/同类业绩/费率)轻量打分全市场 → top 200
+      Stage 2: 5 维度(加风控/持续性)全打分 → top N
+
+    WHEN TO USE:
+    - "帮我从全市场找最好的债基"
+    - "发现规模>5亿的混合基金 top 10"
+    - 替代网络搜索建候选池(消除 SEO/流行度偏见)
+
+    HOW TO USE:
+    - risk_level: "conservative"|"moderate"|"aggressive" (影响评分权重)
+    - allowed_types: 逗号分隔 "bond,mixed,index", 空=全部5类
+    - min_net_asset_value: 最低规模(元), 默认0。注意: Stage 1 无法按规模过滤
+      (PoolFund 无此字段)，此参数当前不生效。买入前请用 audit_single_fund 检查规模红线。
+    - max_fee_rate: 最高费率, 默认0.03 (3%)
+    - top_n: 返回前N只, 默认10
+
+    RETURNS: {count, results[{code, name, type, score, dimension_breakdown, warnings, peer_comparison}],
+              stage1_evaluated, stage2_evaluated, personalized}
+    - stage1_evaluated: Stage 1 评分的基金数(应≈全市场)
+    - stage2_evaluated: Stage 2 评分的基金数(≤200)
+    - 注意: net_asset_value/inception_date 返回 None(PoolFund 无此字段),
+      买入前请用 audit_single_fund 做完整审计
+    """
+    from src.tools.discover import discover_funds as _discover_funds
+    return _discover_funds(
+        risk_level, allowed_types, min_net_asset_value, max_fee_rate, top_n,
+    )
 
 
 # ── Entry Point ──────────────────────────────────────────────────────
