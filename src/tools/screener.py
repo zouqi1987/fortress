@@ -88,6 +88,19 @@ def _enrich_peer_comparison(result: dict, fund_type: str) -> dict:
     return result
 
 
+def _compute_fee_benchmarks(pool_index: dict) -> dict[str, float]:
+    """Average fee per fund_type from pool_index. Shared by screen_funds + discover_funds."""
+    from collections import defaultdict
+    if not pool_index:
+        return {}
+    fee_sums: dict[str, float] = defaultdict(float)
+    fee_counts: dict[str, int] = defaultdict(int)
+    for pf in pool_index.values():
+        fee_sums[pf.fund_type] += float(pf.fee)
+        fee_counts[pf.fund_type] += 1
+    return {t: fee_sums[t] / fee_counts[t] for t in fee_counts if fee_counts[t] > 0}
+
+
 def screen_funds(
     funds: list,
     min_net_asset_value: float = 0,
@@ -170,18 +183,10 @@ def screen_funds(
     )
 
     # ── Fill fee benchmarks (avg fee per fund_type from pool) ────────
-    fee_benchmarks: dict[str, float] = {}
-    if pool_index:
-        from collections import defaultdict
-        fee_sums: dict[str, float] = defaultdict(float)
-        fee_counts: dict[str, int] = defaultdict(int)
-        for pf in pool_index.values():
-            fee_sums[pf.fund_type] += float(pf.fee)
-            fee_counts[pf.fund_type] += 1
-        fee_benchmarks = {t: fee_sums[t] / fee_counts[t] for t in fee_counts if fee_counts[t] > 0}
-        for r in results:
-            if "fee" in r.dimension_breakdown:
-                r.dimension_breakdown["fee"]["benchmark"] = fee_benchmarks.get(r.fund.type)
+    fee_benchmarks = _compute_fee_benchmarks(pool_index)
+    for r in results:
+        if "fee" in r.dimension_breakdown:
+            r.dimension_breakdown["fee"]["benchmark"] = fee_benchmarks.get(r.fund.type)
 
     # ── Build output with dimension breakdown ─────────────────────────
     have_peers = bool(cat_avg_data)

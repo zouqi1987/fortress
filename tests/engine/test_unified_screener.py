@@ -225,6 +225,38 @@ class TestDimensions:
         assert "persistence" not in bd
         assert "fee" in bd
 
+    def test_dimension_breakdown_enriched_format(self):
+        """Each dimension has score + raw + benchmark keys (not bare int)."""
+        fund = _make_fund("001", type="bond")
+        store = _mock_nav_store({"001": _make_nav()})
+        results = score_funds(
+            [fund], ScreenConfig(), store, _pool_index([fund]), _default_cat_avg()
+        )
+        bd = results[0].dimension_breakdown
+        for dim_name, dim_data in bd.items():
+            assert isinstance(dim_data, dict), f"{dim_name} should be dict, got {type(dim_data)}"
+            assert "score" in dim_data, f"{dim_name} missing 'score' key"
+            assert "raw" in dim_data, f"{dim_name} missing 'raw' key"
+            assert "benchmark" in dim_data, f"{dim_name} missing 'benchmark' key"
+            assert isinstance(dim_data["score"], int), f"{dim_name} score should be int"
+
+    def test_dimension_raw_sanitizes_nan(self):
+        """NaN ratings in raw should be converted to None for JSON safety."""
+        from math import nan
+        fund = _make_fund("001", type="bond")
+        pool = {
+            "001": _make_pool_fund("001", ratings={
+                "morningstar": 4, "shanghai": nan, "zhaoshang": nan, "jiAn": nan
+            })
+        }
+        store = _mock_nav_store({"001": _make_nav()})
+        results = score_funds([fund], ScreenConfig(), store, pool, _default_cat_avg())
+        raw = results[0].dimension_breakdown["institutional_consensus"]["raw"]
+        assert raw["morningstar"] == 4
+        assert raw["shanghai"] is None  # NaN sanitized to None
+        assert raw["zhaoshang"] is None
+        assert raw["jiAn"] is None
+
     def test_results_sorted_by_score_descending(self):
         funds = [_make_fund(f"00{i}") for i in range(3)]
         # Give fund 2 higher ratings → higher consensus score

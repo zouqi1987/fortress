@@ -136,14 +136,8 @@ def discover_funds(
     candidates = stage1_results[:_STAGE2_CANDIDATES]
 
     # ── Compute fee benchmarks (avg fee per fund_type from pool) ─────
-    fee_benchmarks: dict[str, float] = {}
-    from collections import defaultdict
-    fee_sums: dict[str, float] = defaultdict(float)
-    fee_counts: dict[str, int] = defaultdict(int)
-    for pf in pool_index.values():
-        fee_sums[pf.fund_type] += float(pf.fee)
-        fee_counts[pf.fund_type] += 1
-    fee_benchmarks = {t: fee_sums[t] / fee_counts[t] for t in fee_counts if fee_counts[t] > 0}
+    from src.tools.screener import _compute_fee_benchmarks
+    fee_benchmarks = _compute_fee_benchmarks(pool_index)
 
     # ── Stage 2: enrich with risk_control + persistence ──────────────
     final_results: list[dict] = []
@@ -154,7 +148,8 @@ def discover_funds(
 
         fund_class = classify_fund_type(light.fund_type)
         full_weights = get_weights(fund_class, risk_level)
-        dimensions = dict(light.dimension_breakdown)  # copy enriched Stage 1 dims
+        # Deep-copy inner dicts to avoid mutating the frozen LightResult
+        dimensions = {k: dict(v) for k, v in light.dimension_breakdown.items()}
 
         # Fill fee benchmark (not available in engine layer — needs pool)
         if "fee" in dimensions:

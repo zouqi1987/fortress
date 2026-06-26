@@ -9,6 +9,7 @@ data are excluded — never fabricated.
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from math import isnan
 from typing import TYPE_CHECKING
 
 from src.datatypes import FundInfo, InsufficientDataError, fmt_amount
@@ -18,6 +19,16 @@ from src.engine.risk_personalization import classify_fund_type, get_weights
 
 if TYPE_CHECKING:
     from src.data.sources.fund_pool import PoolFund
+
+
+def _sanitize_raw(raw: dict) -> dict:
+    """Convert NaN floats to None for JSON-safe output.
+
+    akshare ratings/returns can contain NaN for missing values.
+    NaN is not valid JSON (ECMA-404); pydantic serializes it as null,
+    but we convert explicitly so the semantics are clear: None = missing.
+    """
+    return {k: (None if isinstance(v, float) and isnan(v) else v) for k, v in raw.items()}
     from src.data.sources.nav_store import NavStore
 
 
@@ -121,7 +132,7 @@ def score_funds(
             }
             dimensions["institutional_consensus"] = {
                 "score": score_institutional_consensus(ratings),
-                "raw": ratings,
+                "raw": _sanitize_raw(ratings),
                 "benchmark": None,
             }
         except InsufficientDataError:
@@ -142,7 +153,7 @@ def score_funds(
         try:
             dimensions["peer_performance"] = {
                 "score": score_peer_performance(fund_returns, cat_avg),
-                "raw": fund_returns,
+                "raw": _sanitize_raw(fund_returns),
                 "benchmark": cat_avg,
             }
         except InsufficientDataError:
@@ -250,7 +261,7 @@ def score_funds_light(
             }
             dimensions["institutional_consensus"] = {
                 "score": score_institutional_consensus(ratings),
-                "raw": ratings,
+                "raw": _sanitize_raw(ratings),
                 "benchmark": None,
             }
         except InsufficientDataError:
@@ -268,7 +279,7 @@ def score_funds_light(
         try:
             dimensions["peer_performance"] = {
                 "score": score_peer_performance(fund_returns, cat_avg),
-                "raw": fund_returns,
+                "raw": _sanitize_raw(fund_returns),
                 "benchmark": cat_avg,
             }
         except InsufficientDataError:
