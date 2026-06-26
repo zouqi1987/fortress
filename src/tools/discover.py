@@ -75,6 +75,16 @@ def discover_funds(
     """
     if top_n < 0:
         top_n = 0
+    if top_n == 0:
+        # Early exit — skip the full pipeline when no results requested.
+        # Avoids scoring 19,747 funds + 200 NavStore queries for nothing.
+        return {
+            "count": 0,
+            "results": [],
+            "stage1_evaluated": 0,
+            "stage2_evaluated": 0,
+            "personalized": risk_level,
+        }
 
     # ── Build ScreenConfig ──────────────────────────────────────────
     types_set = frozenset(

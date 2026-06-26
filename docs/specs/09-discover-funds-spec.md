@@ -31,8 +31,8 @@ discover_funds(
         "net_asset_value", "fee_rate", "inception_date",
         "score", "dimension_breakdown", "warnings", "peer_comparison"
     }],
-    "stage1_evaluated": int,   # diagnostic: how many funds entered Stage 1
-    "stage2_evaluated": int,   # diagnostic: how many funds entered Stage 2
+    "stage1_evaluated": int,   # diagnostic: how many funds were scored in Stage 1 (passed all exclusion rules)
+    "stage2_evaluated": int,   # diagnostic: how many funds SURVIVED Stage 2 (entered 200, minus insufficient-NAV exclusions)
     "personalized": str,
 }
 ```
@@ -157,9 +157,11 @@ def score_funds_light(
 2. Load `category_averages` via existing `_get_or_load_category_averages()` (cached)
 3. Build `ScreenConfig` from params (min_net_asset_value, allowed_types, max_fee_rate)
 4. **Stage 1**: call `score_funds_light(list(pool_index.values()), config, cat_avg, risk_level)` → ranked list
-5. Take top 200 → convert to `FundInfo` list
-6. **Stage 2**: call `score_funds(top_200, config, nav_store, pool_index, cat_avg, risk_level)` → full scored list
+5. Take top 200 candidates
+6. **Stage 2** (inline enrichment — NOT a `score_funds()` call): for each candidate, copy Stage 1's 3 dimension scores, then add `risk_control = score_risk_control(nav_series) * 5` and `persistence = score_consistency(nav_series) * 10` (skip for money funds), then recompute with full 5-dim `get_weights`. This inline approach avoids re-fetching ratings/returns already computed in Stage 1 and sidesteps the PoolFund→FundInfo conversion (PoolFund lacks `net_asset_value`/`inception_date`). If `len(nav_series) < 63` → skip (excluded — insufficient NAV).
 7. Take top `top_n`, enrich with `peer_comparison`, return
+
+**Implementation note (Stage 2 deviation from original spec text):** The original spec draft said "call `score_funds(top_200, ...)`". The implementation instead reuses Stage 1's 3 dims inline + adds 2 NavStore dims. This is intentional — it's more efficient (no re-fetch) and avoids the PoolFund/FundInfo data mismatch. The scoring functions (`score_risk_control`, `score_consistency`) and weight formula (`get_weights`) are identical to what `score_funds()` uses, so results are consistent.
 
 ### NavStore coverage gate
 

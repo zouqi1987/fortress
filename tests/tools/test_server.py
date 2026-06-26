@@ -8,7 +8,7 @@ class TestMCPServer:
         assert server is not None
         assert server.name == "fortress"
 
-    def test_all_twelve_tools_registered(self):
+    def test_all_tools_registered(self):
         from src.tools.server import server
         from mcp.server.fastmcp.tools.tool_manager import ToolManager
 
