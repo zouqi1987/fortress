@@ -1,6 +1,6 @@
 # Fortress — AI 投资顾问 Agent Skill
 
-对话式 AI 投资顾问。3 个命名 Agent + 16 个 MCP 工具，覆盖个人基金投资全场景。
+对话式 AI 投资顾问。3 个命名 Agent + 14 个 MCP 支持工具，覆盖个人基金投资全场景。
 
 ## 安装
 
@@ -46,7 +46,15 @@ claude plugin install fortress
 | `机会捕捉` | B | 市场研判 → 基金筛选 → 多空信号 | "有没有机会"、"该加仓吗" |
 | `持仓诊断` | C | 健康评分 → 红线审计 → 压力测试 | "帮我看看持仓"、"体检一下" |
 
-## MCP 工具（16个：3 Agent + 13 支持）
+## MCP 工具（17个：3 Agent + 14 支持）
+
+### 三条路径入口 — 命名 Agent（一键式）
+
+| Agent | 工具 | 描述 | 使用场景 |
+|-------|------|------|----------|
+| `底仓配置` | `allocate_portfolio` | 风险测评 → 资产配置 → 压力测试 → HTML报告 | "帮我做个配置"、"评估风险" |
+| `机会捕捉` | `hunt_opportunity` | 市场研判 → 基金筛选 → 多空信号 → HTML报告 | "有没有机会"、"该加仓吗" |
+| `持仓诊断` | `diagnose_holdings` | 健康评分 → 红线审计 → 压力测试 → HTML报告 | "帮我看看持仓"、"体检一下" |
 
 ### 路径 A 核心链 — 底仓配置
 
@@ -55,7 +63,8 @@ claude plugin install fortress
 | `assess_risk` | 6 因子风险测评 → 等级 + 建议配置比 | horizon, max_loss_pct, income, experience, liquidity |
 | `get_allocation` | 三层四桶配置方案 → 具体金额分配 | risk_level, total_amount |
 | `screen_funds` | 基金筛选评分（5 维度加权） | funds[], allowed_types, risk_level? |
-| `get_advice` | 完整投顾管线 → HTML 报告 | path="A", message, equity?, bond?, cash? |
+| `discover_funds` | 全市场基金发现 — 两阶段5维打分从19,747只池中筛选top N | risk_level, allowed_types?, top_n?, max_fee_rate? |
+| `get_advice` | 完整投顾管线 → HTML 报告（legacy，建议用3个命名Agent） | path="A", message, equity?, bond?, cash? |
 
 ### 路径 B 核心链 — 机会捕捉
 
@@ -79,6 +88,7 @@ claude plugin install fortress
 |------|------|---------|
 | `list_hard_rules` | 查看 5 条硬红线规则定义 | （无参数） |
 | `manage_personal_rules` | 管理个人投资规则（增/删/查/清） | action, rule_id?, fund_types_blacklist?, max_single_position? |
+| `export_report` | 保存 HTML 报告为自包含 .html 文件 | report_html, output_path, title? |
 
 ## 典型使用场景
 
@@ -87,26 +97,18 @@ claude plugin install fortress
 > 用户："我工作三年，有 20 万闲钱想投资，能接受 10% 亏损，帮我做个方案。"
 
 ```
-1. assess_risk("C", 10.0, 3, 3, 3)
-   → risk_level="moderate", equity_pct=60, bond_pct=30, cash_pct=10
+1. allocate_portfolio("工作三年，20万闲钱，能接受10%亏损")
+   → 自动完成：风险测评 → 资产配置 → 压力测试 → HTML报告
+   → risk_level="moderate", buckets: 活钱/稳健/增值 三层分配
 
-2. get_allocation("moderate", 200000)
-   → buckets: 活钱 20,000(货币) + 稳健 60,000(债券) + 增值 120,000(混合+指数)
+2. discover_funds("moderate", allowed_types="bond", top_n=5)
+   → 从全市场筛选最优债基
 
-3. lookup_fund("000001") + lookup_fund("000002") ...  // 查找候选基金
-   → 每只基金的 code, name, type, size, fee, inception, NAV
+3. screen_funds([fundA, fundB, fundC], risk_level="moderate")
+   → 候选基金 5 维评分对比
 
-4. screen_funds([
-     {code:"000001", name:"华夏成长", type:"mixed", ...},
-     {code:"000002", name:"易方达债券", type:"bond", ...},
-   ], allowed_types="mixed,bond")
-   → results 按 score 降序，选出每桶最优基金
-
-5. get_advice("A", "首次配置20万")
-   → HTML 报告：持仓→风险→配置→审计→压测→健康
-
-6. run_scenario(120000, 60000, 20000)
-   → "2008金融危机"下最大亏损 -63,000 (-31.5%)
+4. audit_single_fund(...)  // 对拟买入基金逐只审计
+   → 确认不触发 RL-001~RL-005
 ```
 
 ### 场景 2：市场机会评估（路径 B）
@@ -121,16 +123,13 @@ claude plugin install fortress
    detect_regime(current=3050, ma200=3200, ma120=3100, risk_level="moderate")
    → regime="bear", multiplier=0.6  ← 熊市，建议减配股票
 
-3. lookup_fund("000001")  // 查找想加仓的基金
-   → 基金基本信息和近期净值
+3. hunt_opportunity("市场下跌，评估加仓机会", equity=120000, bond=60000, cash=20000)
+   → 自动完成：周期研判 → 基金筛选 → 多空信号 → HTML报告
 
-4. screen_funds([fundA, fundB, fundC], allowed_types="mixed,bond")
-   → 筛选出当前环境下较优的基金
+4. discover_funds("moderate", allowed_types="mixed", top_n=10)
+   → 全市场找出当前周期下最优的混合基金
 
-5. get_advice("B", "市场下跌，要不要加仓", equity=120000, bond=60000, cash=20000)
-   → 多空辩论 → 配置建议 → 压力测试 → HTML 报告
-
-6. audit_single_fund(...)  // 对拟买入基金逐只审计
+5. audit_single_fund(...)  // 对拟买入基金逐只审计
    → 确认不触发 RL-001~RL-005
 ```
 
@@ -139,8 +138,9 @@ claude plugin install fortress
 > 用户："季度检查，帮我看看现在组合健康吗。股票 8 万、债券 3 万、现金 1 万，共 5 只基金。"
 
 ```
-1. get_advice("C", "季度诊断", equity=80000, bond=30000, cash=10000)
-   → HTML 报告：压力测试 + 健康评分 + 单品审计
+1. diagnose_holdings("季度诊断，5只基金", equity=80000, bond=30000, cash=10000, num_holdings=5)
+   → 自动完成：健康评分 → 红线审计 → 压力测试 → HTML报告
+   → 注：num_holdings 参数影响分散度评分，超过8只可能降低分数
 
 2. check_health(67, 25, 8, "moderate", 0.012, 12.0, 5)
    → overall_score=72, grade="B"
@@ -191,7 +191,7 @@ akshare (主源, 3次指数退避)
 # 安装
 pip install -e ".[dev]"
 
-# 测试（281 通过）
+# 测试（285 通过）
 pytest tests/ -v
 
 # 启动 MCP server (stdio)
