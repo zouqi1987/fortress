@@ -209,6 +209,79 @@ AGENT_CARD: dict = {
                 "required": ["funds"],
             },
         },
+        {
+            "name": "discover_funds",
+            "description": "全市场基金发现 — 两阶段5维打分从19,747只池中筛选top N",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "risk_level": {"type": "string", "description": "conservative|moderate|aggressive"},
+                    "allowed_types": {"type": "string", "description": "逗号分隔 bond,mixed,index,stock,money"},
+                    "min_net_asset_value": {"type": "number"},
+                    "max_fee_rate": {"type": "number"},
+                    "top_n": {"type": "integer"},
+                },
+                "required": ["risk_level"],
+            },
+        },
+        {
+            "name": "allocate_portfolio",
+            "description": "底仓配置Agent — 风险测评→资产配置→压力测试→HTML报告",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "用户的财务情况和投资目标"},
+                    "equity": {"type": "number"},
+                    "bond": {"type": "number"},
+                    "cash": {"type": "number"},
+                    "num_holdings": {"type": "integer", "description": "持仓基金数量"},
+                },
+                "required": ["message"],
+            },
+        },
+        {
+            "name": "hunt_opportunity",
+            "description": "机会捕捉Agent — 市场周期研判→基金筛选→多空信号",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "用户的投资目标和风险偏好"},
+                    "equity": {"type": "number"},
+                    "bond": {"type": "number"},
+                    "cash": {"type": "number"},
+                    "num_holdings": {"type": "integer"},
+                },
+                "required": ["message"],
+            },
+        },
+        {
+            "name": "diagnose_holdings",
+            "description": "持仓诊断Agent — 健康评分→红线审计→压力测试→HTML报告",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "用户的持仓情况和关注点"},
+                    "equity": {"type": "number"},
+                    "bond": {"type": "number"},
+                    "cash": {"type": "number"},
+                    "num_holdings": {"type": "integer"},
+                },
+                "required": ["message"],
+            },
+        },
+        {
+            "name": "export_report",
+            "description": "将HTML报告保存为自包含.html文件（可打印为PDF）",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "report_html": {"type": "string", "description": "报告HTML内容"},
+                    "output_path": {"type": "string", "description": "保存路径"},
+                    "title": {"type": "string", "description": "页面标题"},
+                },
+                "required": ["report_html", "output_path"],
+            },
+        },
     ],
 }
 
@@ -227,6 +300,11 @@ _TOOLS = {
     "detect_regime": ("src.tools.macro", "detect_regime"),
     "manage_personal_rules": ("src.tools.personal_rules", "manage_personal_rules"),
     "screen_funds": ("src.tools.screener", "screen_funds"),
+    "discover_funds": ("src.tools.discover", "discover_funds"),
+    "allocate_portfolio": ("src.tools.advisory", "allocate_portfolio"),
+    "hunt_opportunity": ("src.tools.advisory", "hunt_opportunity"),
+    "diagnose_holdings": ("src.tools.advisory", "diagnose_holdings"),
+    "export_report": ("src.tools.export", "export_report"),
 }
 
 
